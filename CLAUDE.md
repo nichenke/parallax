@@ -11,6 +11,13 @@ brainstorm → requirement refinement → design → adversarial review → plan
 
 The name comes from parallax — the apparent shift in an object's position when observed from different vantage points. The difference between views reveals truth. One-perspective design review is parallax error.
 
+## Development Philosophy
+
+- **Quality bar:** This should resonate with experienced senior+ engineers. Think clearly, articulate tradeoffs, justify decisions.
+- **Prototype-first:** Exhaustive research matters, but not at the expense of building. We learn more from a working prototype than another design doc. Build to understand, not design to death.
+- **YAGNI ruthlessly:** Don't over-engineer. Build what's needed now, defer what isn't.
+- **SRE-influenced:** Premortem thinking, error budgets, blast radius scoping.
+
 ## Project Tracks (GitHub Issues)
 
 Each track is an independent investigation area, suitable for a separate session:
@@ -23,14 +30,44 @@ Each track is an independent investigation area, suitable for a separate session
 6. **Claude-native background automation** — Agent SDK + MCP + cron for long-running research
 7. **Test cases** — black-box validation using real design sessions
 
-## Key Decisions Made
+## Key Decisions
 
 - **Name:** Parallax (parallax error = one-angle review, baseline = reviewer diversity, triangulation = finding consolidation)
 - **Namespace:** `parallax:survey`, `parallax:calibrate`, `parallax:review`, `parallax:orchestrate`, `parallax:eval`
-- **Public repo:** Useful beyond personal infra, helps at work too
+- **Architecture:** Pipeline of skills (not a monolithic single skill). Each namespace segment is independently useful.
+- **Public repo:** Useful beyond personal infra, applicable to work contexts
 - **Core differentiator:** Adversarial design review — no production tools exist for this (validated by Mitsubishi's Jan 2026 proprietary approach)
 - **Build vs leverage:** BUILD adversarial review (novel), LEVERAGE LangGraph + Inspect AI + Claude Code Swarms (mature)
+- **Iteration tracking:** Git commits per design iteration (full history, diffable)
+- **Fatal review findings:** TBD during prototyping — test both "always escalate" and "attempt one redesign pass"
+- **Calibrate skill:** Standalone (useful outside the pipeline)
 - **Self-improvement:** DEFER to Phase 3+ (research-stage, not MVP-critical)
+- **Review agent count:** Empirical — determine optimal N via eval framework
+
+## Budget & Tooling
+
+**Monthly budget:** $2000 (currently projects ~$200-500/month actual spend — most tools are free/OSS)
+
+### Available Tools
+
+| Tool | Access | Cost |
+|------|--------|------|
+| Claude (interactive) | MAX subscription | Covered |
+| Claude API (evals) | Bedrock (work) + direct | ~$150-400/mo depending on model mix |
+| Codex | OpenAI partnership (work) | Covered for interactive; API ~$50-100/mo for evals |
+| Cursor | Work license | Covered |
+| Inspect AI | Open source (MIT) | Free — eval runner, you pay API tokens |
+| LangGraph | Open source (MIT) | Free — orchestration framework |
+| Promptfoo | Open source | Free — prompt testing, 10k probes/month |
+| Braintrust | Free tier | 1M spans, 10k scores — months of prototyping |
+| LangSmith | Free tier | 5k traces/month — sufficient for early R&D |
+| Claude Agent SDK | Free | Pay API token costs only |
+
+### Cost Strategy
+- **Batch API** for all non-interactive eval runs (50% discount)
+- **Prompt caching** for repeated system prompts across evals (90% input cost reduction on cache hits)
+- **Model tiering:** Haiku for simple evals, Sonnet for review agents, Opus sparingly for adversarial deep analysis
+- Claude is the primary model. Codex for comparison evals and execution-phase experiments.
 
 ## Architecture Notes
 
@@ -56,8 +93,8 @@ parallax/
 └── evals/                     — Inspect AI eval definitions
 ```
 
-### Key Frameworks to Integrate
-- **Inspect AI** (inspect.aisi.org.uk) — agent evaluation, 100+ pre-built evals, supports Claude + Codex
+### Key Frameworks
+- **Inspect AI** — agent evaluation, 100+ pre-built evals, supports Claude + Codex
 - **LangGraph** — stateful graph workflows for pipeline control
 - **Claude Code Swarms** — native multi-agent via TeammateTool
 - **Braintrust** — LLM-as-judge for design quality scoring
@@ -70,6 +107,17 @@ parallax/
 - `dispatching-parallel-agents` → parallax:review uses this pattern
 - `requesting-code-review` → parallax:review adapts this for design review
 
+## Test Cases
+
+Four real design sessions identified for black-box validation. See `docs/brainstorm-2026-02-15.md` for full details.
+
+| Test Case | Source | Best For |
+|-----------|--------|----------|
+| Second Brain Design | openclaw | Full review orchestration (3 reviews, 40+ findings) |
+| Semantic Memory Search | openclaw | Iteration detection (artifact mismatch) |
+| Phase 4 Plan | openclaw | Missing review detection |
+| claude-ai-customize | local | Phase detection, continuation |
+
 ## Related Repos
 
 | Repo | Relationship |
@@ -77,46 +125,26 @@ parallax/
 | `nichenke/openclaw` (private) | Origin — problem statement emerged from real OpenClaw design sessions |
 | `~/src/claude-ai-customize` (local) | Test case candidate — partial (plan complete, execution pending) |
 
-## Brainstorm Session Context (2026-02-15)
+## Context Management
 
-This repo was created during a brainstorming session that explored 7 topics:
+Context compaction is a known constraint. This repo may be worked on from multiple machines.
 
-0. **Competing skills landscape** — landscape analysis complete (docs/research/landscape-analysis.md)
-1. **Black-box testing** — identified 3 real test cases from OpenClaw (Second Brain Design, Semantic Memory Search, Phase 4 Plan) + 1 partial (claude-ai-customize)
-2. **Bill/Ryker agent architecture** — separate agent (Ryker) with isolated PAT, separate Docker network, Opus for research is worth the security trade-off
-3. **Public repo strategy** — this repo
-4. **Agent teams + Codex** — hybrid strategy: Claude for design phases, Codex for execution/eval
-5. **Skill testing framework** — Inspect AI as foundation, need custom design evals
-6. **Claude-native automation** — OpenClaw cron → Agent SDK → MCP → Slack checkpoints → GitHub Issues/PRs
+### Portable (travels with git)
+- **CLAUDE.md** — authoritative project context, always loaded by Claude Code on any clone
+- **docs/** — research, analysis, session captures, problem statements
 
-### Test Case Inventory
+### Machine-local (not in git)
+- **`.claude/projects/.../memory/MEMORY.md`** — local paths, ephemeral session notes, current task state. Path-encoded to filesystem, won't exist on other machines.
 
-| Test Case | Source | Phases Present | Review Artifacts | Best For |
-|-----------|--------|---------------|-----------------|----------|
-| Second Brain Design | openclaw | Design → 3 reviews → Rev 4 | 1000+ lines, 40+ findings | Full review orchestration |
-| Semantic Memory Search | openclaw | Design → review → revised → plan | Referenced but missing | Iteration detection |
-| Phase 4 Plan | openclaw | Options → plan (no review) | None | Missing review detection |
-| claude-ai-customize | local | Plan complete, execution pending | None | Phase detection, continuation |
-
-### Validation Criteria for Orchestrator
-1. Correctly identifies project phase
-2. Spawns appropriate parallel reviews, consolidates findings
-3. Catches design-to-plan inconsistencies
-4. Enforces review artifact existence when status claims review happened
-5. Tracks finding resolution (accepted/mitigated/deferred)
-6. Measurable: cost and time overhead vs manual orchestration
-
-### Outcome Data Needed for Testing
-- Session recordings (time, prompts, decisions)
-- Finding counts and severity distributions
-- Iteration counts before convergence
-- Design-to-plan consistency scores
-- Token usage per phase
+### Session Discipline
+- **Heavy subagent use** — delegate research and exploration to subagents to protect main context window
+- **End of session** — promote any important decisions from memory to CLAUDE.md (so they travel with git)
+- **Brainstorm capture** — raw session notes go in `docs/`, distilled decisions go in CLAUDE.md
 
 ## Workflow Preferences
 
 - **Local-first development** — create files locally, test, then commit
 - **Security-conscious** — tokens never in LLM context, credential separation between agents
-- **Pragmatic** — don't over-engineer; YAGNI ruthlessly
-- **SRE-influenced** — premortem thinking, error budgets, blast radius scoping
+- **Pragmatic** — build to learn, YAGNI ruthlessly
+- **Prototype-first** — working code over design docs when exploring unknowns
 - **Timezone:** Mountain Time (America/Denver)

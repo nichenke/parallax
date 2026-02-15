@@ -84,9 +84,30 @@
 | Adversarial review | **BUILD** custom | Core differentiator, nothing exists |
 | Design templates | **BUILD** | Design-specific, no off-the-shelf |
 | Eval framework | **LEVERAGE** Inspect AI | Built for agent workflows |
-| Brainstorming | **ADAPT** AutoGen patterns | Multi-agent discussion exists |
+| Brainstorming | **OPEN** — see below | Bootstrap problem: superpowers vs clean-room |
 | Execution | **LEVERAGE** existing skills / Codex | Mature ecosystem |
 | Self-improvement | **DEFER** | Research-stage |
+
+---
+
+## Open: Superpowers as Foundation
+
+**The bootstrap problem:** Parallax aims to orchestrate and evaluate design workflows. The superpowers plugin already has `brainstorming`, `writing-plans`, `executing-plans`, and `dispatching-parallel-agents` skills. Building on these is the fastest path to a working prototype — but it creates a circularity risk: evaluating superpowers-based orchestration using superpowers-built tooling.
+
+**Three options:**
+
+| Approach | Pros | Cons |
+|----------|------|------|
+| **EXTEND superpowers** | Fastest to prototype. Composable. Existing user base. | Circular evaluation. Hard to attribute value (parallax vs superpowers). Coupled to superpowers' design assumptions. |
+| **Clean-room build** | Unbiased evaluation. Full architectural control. Clear attribution. | Slower. Reinvents solved problems. May diverge unnecessarily. |
+| **Bootstrap then evaluate** | Use superpowers to build v0.1, then evaluate superpowers itself as one of the first test cases. Re-evaluate foundation choice with data. | Requires discipline to actually re-evaluate. Sunk cost bias. But gives a working prototype to evaluate *with*. |
+
+**Key sub-questions:**
+1. Is there sufficient independent evaluation of superpowers skills today to make a risk-bet? (As of Feb 2026: no formal evals exist — superpowers skills are used but not benchmarked.)
+2. If we bootstrap with superpowers, what's the minimum viable prototype needed before we can meaningfully evaluate the foundation choice?
+3. Can we isolate the superpowers dependency enough that swapping it out later isn't a rewrite?
+
+**Current lean:** No decision yet. This is one of the first things the eval framework (Track 5) should answer.
 
 ---
 

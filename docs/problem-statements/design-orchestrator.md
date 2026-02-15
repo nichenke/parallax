@@ -88,14 +88,23 @@ User: "I want to add semantic search to the memory system"
 - Severity should be normalized across reviewers
 
 ### Requirement Refinement
+- **Outcome-focused** — define what success looks like before defining how to get there. This has been the single biggest design quality lever in practice: missing a critical angle during requirements means the design optimizes for the wrong thing.
 - MoSCoW (Must / Should / Could / Won't) or similar prioritization framework
-- Anti-goals should be explicit
-- Consider PM-style frameworks (Jobs-to-be-Done, etc.)
+- Anti-goals should be explicit (what are we deliberately NOT doing?)
+- Document key **assumptions and constraints** explicitly — these become the review checklist. Any review finding that challenges an assumption is high-value and likely triggers a cycle restart, not a patch.
+- Consider PM-style frameworks (Jobs-to-be-Done, etc.) but always in service of outcomes, not process
 
 ### Iteration Loops
 - After adversarial review, auto-fix trivial findings (typos, wrong file paths) and re-review
 - Escalate non-trivial findings to human with recommendations
 - Track which findings have been addressed across iterations
+- **Findings that challenge key assumptions or constraints are a success** — they likely trigger a full design cycle restart rather than incremental fixes. Archive the current plan (often useful as reference), restart the design phase with updated assumptions.
+- **ADR-style finding documentation** — each review cycle produces a record of what was found, what was decided, and why. This builds a decision history that future reviewers (human and AI) can reference. Changing a decision is fine — undocumented decisions are the problem.
+
+### Document Chain as RFC
+- The pipeline naturally produces a chain: problem statement → requirements → design → review findings → plan. This chain consolidates into something RFC-like — a detailed record of goals, tradeoffs, alternatives considered, and reasoning.
+- This artifact serves both human reviewers ("why was this designed this way?") and AI reviewers (context for future review cycles).
+- **Self-consuming:** Parallax should use its own document chain as input to its own review tasks. The artifacts are the context that makes adversarial review effective.
 
 ### Agent Team Comparison
 - Run multiple agents on the same review task with different prompts/models
@@ -115,13 +124,17 @@ User: "I want to add semantic search to the memory system"
 - Not a project manager — no timeline estimation, resource allocation, or sprint planning
 - Not trying to eliminate human involvement — trying to make the human's review time more productive by pre-filtering through adversarial review
 
+## Resolved Questions
+
+1. **Single skill or pipeline?** → Pipeline of skills. Each namespace segment (`survey`, `calibrate`, `review`, `orchestrate`, `eval`) is independently useful.
+2. **Fatal review finding invalidates design?** → TBD during prototyping. Will test both "always escalate to human" and "attempt one automated redesign pass." Deferred to prototype phase.
+3. **Right number of review agents?** → Empirical. Determine optimal N via eval framework (diminishing returns analysis).
+4. **Requirement refinement standalone?** → Yes. `parallax:calibrate` is useful outside the pipeline (e.g., for any design session).
+5. **Version/track design iterations?** → Git commits per iteration. Full history, diffable artifacts.
+
 ## Open Questions
 
-1. Should the orchestrator be a single skill or a pipeline of skills that invoke each other?
-2. How do we handle the case where a review finding invalidates a fundamental design choice?
-3. What's the right number of review agents? Diminishing returns after N?
-4. Should requirement refinement be its own standalone skill (useful outside this pipeline)?
-5. How do we version/track design iterations? Git commits per iteration, or in-memory only?
+1. **Superpowers as foundation vs clean-room?** — Should parallax build on top of the superpowers brainstorming/planning skills, or start from scratch? Risk: evaluating superpowers-based design orchestration using superpowers-built tooling is circular. See landscape-analysis.md and plugin-framework-landscape.md for context. Compound-engineering (EveryInc) and adversarial-spec (zscole) are the two most relevant alternatives discovered — see plugin-framework-landscape.md for analysis.
 
 ## Prior Art
 
