@@ -3,7 +3,7 @@
 **Source:** claude-ai-customize repo — Lever 2 (Instructions), Instruction Sharpener + Position Mapper meta-prompts
 **Applies to:** `parallax:review` — adversarial review agents
 **Priority:** High
-**Decision:** Likely adopt — pending parallax design's own prompt engineering approach
+**Decision:** Adopt — incorporated into problem statement (Subagent Orchestration). Use Instruction Sharpener / Position Mapper during prompt authoring. Wait for parallax design's own prompt engineering approach, then cross-reference.
 
 ## Finding
 

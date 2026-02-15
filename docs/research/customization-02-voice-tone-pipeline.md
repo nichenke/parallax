@@ -3,7 +3,7 @@
 **Source:** claude-ai-customize repo — Lever 3 (Style/Tone Controls), Custom Styles from writing samples
 **Applies to:** All human-facing output — checkpoint summaries, review findings, calibrate output, plan summaries
 **Priority:** High (quick win)
-**Decision:** Likely adopt — inline instructions for portability (not custom style). Define baseline voice in plugin-level CLAUDE.md; per-skill overrides only where a phase genuinely needs a different tone.
+**Decision:** Adopted — incorporated into problem statement (Output Voice). Inline instructions for model portability. Baseline voice in plugin config, per-skill overrides only where needed.
 
 ## Finding
 

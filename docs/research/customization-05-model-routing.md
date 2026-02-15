@@ -2,8 +2,8 @@
 
 **Source:** claude-ai-customize repo — Lever 4 (Tools), cost optimization; CLAUDE.md cost strategy
 **Applies to:** All pipeline phases — survey, calibrate, review, consolidation, eval
-**Priority:** Medium-high (defer until empirical data available)
-**Decision:** Adopt — configurable model parameter per phase from the start, default to Sonnet everywhere, validate and tune empirically once eval framework is running.
+**Priority:** Medium-high (defer tuning until empirical data available)
+**Decision:** Adopted — incorporated into problem statement (Agent Team Comparison). Configurable model parameter per phase from the start, default Sonnet everywhere, tune empirically via evals.
 
 ## Finding
 
