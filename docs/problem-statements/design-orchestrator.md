@@ -145,6 +145,7 @@ User: "I want to add semantic search to the memory system"
 - **CLI-first.** Adopt available CLI tools immediately: `gh`, `jq`, `git`, `curl`, `npx promptfoo`, `inspect`. These work today with no infrastructure.
 - **Investigate:** `braintrust` CLI, `anthropic` CLI (batch API), `tree-sitter` (AST for survey), `semgrep` (security patterns for review), `tokcount`/`ttok` (cost estimation).
 - **MCP deferred to Phase 2+.** Reserve for cases with no CLI equivalent (real-time bidirectional communication, CI/CD triggered reviews). Built-in Claude Code tools sufficient for prototyping. (See customization-07)
+- **Portability sanity check script:** Build a simple script early that runs a parallax skill on both Claude Code and Codex CLI and diffs the output quality. Goal: catch Claude-specific assumptions before they're baked in. Also validates that skills work for complex Codex CLI/app workflows. Keep it simple — a shell script that invokes the skill on each platform and logs results for manual comparison.
 
 ### Human Checkpoints
 - After requirement refinement (before design starts)

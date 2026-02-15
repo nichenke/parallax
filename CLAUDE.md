@@ -68,6 +68,7 @@ Each track is an independent investigation area, suitable for a separate session
 - **Prompt caching** for repeated system prompts across evals (90% input cost reduction on cache hits)
 - **Model tiering:** Haiku for simple evals, Sonnet for review agents, Opus sparingly for adversarial deep analysis
 - Claude is the primary model. Codex for comparison evals and execution-phase experiments.
+- **Codex portability checks:** Run skills on Codex CLI early to surface Claude-specific assumptions. Budget already allocated ($50-100/mo). Multi-LLM review (Claude + GPT + Gemini on same artifact) deferred to eval phase.
 
 ## Architecture Notes
 
