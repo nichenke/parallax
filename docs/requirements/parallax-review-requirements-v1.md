@@ -34,6 +34,7 @@ This skill addresses five validated pain points from real design sessions (see `
 - Pain: No way to measure reviewer effectiveness or iterate on prompts empirically
 - Solution: Structured output with cost/token tracking, eval-compatible format
 - Requirements: FR6 (output artifacts), NFR2 (cost tracking), NFR5 (eval reproducibility), NFR6 (eval testing)
+- Outcome: Track review cost and quality metrics to iteratively improve reviewer effectiveness
 
 **User outcome:** Get adversarial design review in <5 minutes, with clear finding disposition and go/no-go decision.
 
@@ -90,7 +91,7 @@ This skill addresses five validated pain points from real design sessions (see `
 **FR2.7:** Flag systemic issues when >30% of findings with a contributing phase share the same contributing phase
 - **Rationale:** Detect upstream root causes requiring escalation
 - **Source:** design v3 (finding phase classification), v3 review summary
-- **Denominator:** Findings with `contributing_phase` set (not all findings)
+- **Denominator:** Findings with `contributing_phase` set (not all findings). Systemic issues are upstream root causes, not immediate symptoms — only findings with a contributing phase signal upstream problems.
 - **MVP scope:** Exact phase label matching. Semantic root cause clustering deferred (see D13)
 
 **FR2.8:** Surface contradictions when reviewers disagree
@@ -205,6 +206,7 @@ This skill addresses five validated pain points from real design sessions (see `
 **FR7.5:** Validate reviewer JSONL output before synthesis (schema check, retry on malformed JSON)
 - **Rationale:** Malformed output triggers retry, then fail-fast (prevents synthesizer errors)
 - **Source:** design v3 (parallel agent failure handling), Q4 resolution (reviewers output JSONL)
+- **Dependency:** Blocked on JSONL schema definition (Next Steps #4)
 
 **FR7.6:** Clean up partial/corrupted output files before re-running failed reviewers
 - **Rationale:** Avoid stale data contaminating re-run results
@@ -228,6 +230,7 @@ This skill addresses five validated pain points from real design sessions (see `
 
 **FR8.4:** Highlight changed sections (git diff) when available for focus prioritization
 - **Rationale:** Reviewers focus extra scrutiny on newly-changed sections
+- **"When available":** Git repo exists AND design doc has prior committed version. First-time review → no diff highlighting.
 - **Source:** design v3 (reviewer prompt architecture, variable suffix)
 
 ---
@@ -265,15 +268,15 @@ This skill addresses five validated pain points from real design sessions (see `
 - **Source:** Q3 resolution (delta detection)
 - **Output:** `docs/reviews/<topic>/delta-v{N-1}-v{N}.json`
 
-**FR10.3:** Pattern extraction and delta detection run post-synthesis (not in critical path)
-- **Rationale:** Reviewers complete → synthesizer runs → user sees summary, pattern extraction happens asynchronously
-- **Source:** Q3 resolution
+**FR10.3:** Pattern extraction and delta detection run in the critical path (after synthesis, before finding processing)
+- **Rationale:** Pattern analysis is part of the review output, not a side channel. Artifacts always written to disk (async-first).
+- **Source:** Q3 resolution, v2 review refinement
 
-**FR10.4:** Handle high pattern counts (>15 themes)
-- **Interactive mode:** Ask user how to proceed (escalate? continue with verbose output? restart design?)
-- **Async/automated mode:** Note pattern count in summary, continue processing
-- **Optional:** Semantic consolidation pass with Opus (skill parameter: `--deep-consolidation`, deferred to post-MVP)
-- **Source:** Q3 resolution refinement
+**FR10.4:** Reviews with >50 findings skip interactive pattern processing
+- **≤50 findings:** Pattern extraction runs, artifacts to disk, interactive finding processing (FR4.1) includes pattern context
+- **>50 findings:** Pattern extraction runs, artifacts to disk, summary notes finding count. User processes findings async.
+- **Rationale:** Generous MVP threshold. Interactive processing of 50+ findings is impractical in-session.
+- **Source:** Q3 resolution refinement, v2 review
 
 **FR10.5:** Pattern extraction enables semantic root cause clustering (post-MVP enhancement to systemic detection)
 - **Rationale:** After eval framework exists, add deeper analysis beyond simple phase counts
@@ -362,6 +365,10 @@ This skill addresses five validated pain points from real design sessions (see `
 
 ---
 
+## Developer Requirements (Skill Quality Assurance)
+
+These requirements support skill development, testing, and iterative improvement. They are not user-facing features — users benefit indirectly via improved review quality.
+
 ### NFR5: Eval Reproducibility
 
 **NFR5.1:** Git-tracked prompts with version tagging (stable + calibration versions)
@@ -426,9 +433,10 @@ This skill addresses five validated pain points from real design sessions (see `
 - **Rationale:** Multi-LLM compatibility, avoid Claude-specific assumptions
 - **Source:** CLAUDE.md (Codex portability checks), design-orchestrator.md (portability sanity check script)
 
-**C1.3:** Design docs accessible via file paths (local) or URLs (Confluence, Google Docs, Notion)
+**C1.3:** Design docs accessible via local file paths or public URLs (MVP scope)
 - **Reviewers use Read/WebFetch tools** to access documents (not inline in prompts)
-- **Rationale:** Supports non-git workflows, multi-file designs, flexible document access
+- **MVP:** Local files and public URLs only. Authenticated sources (Confluence, Google Docs, Notion) deferred to MCP integration (see D6)
+- **Rationale:** Supports non-git workflows, multi-file designs. MCP connectors required for authenticated sources.
 - **Source:** Q6 resolution (tool use for document access), resolves v3 Critical Finding C4
 
 **C1.4:** Local filesystem (single-user workflow)
@@ -567,7 +575,8 @@ Summary of decisions:
 
 1. ✅ **Open questions resolved** (Q1-Q8) → ADR-001
 2. ✅ **Requirements review** — Format/style, JTBD gap analysis, necessity assessment
-3. **Update design doc** — Sync design v4 with finalized requirements
-4. **JSONL schema implementation** — Define exact structure per FR6.1
-5. **Pattern extraction prototype** — Test FR10 workflow with existing v3 review data
-6. **Token efficiency validation** — Measure savings from clean reviews (FR1.3) + tool-based document access (FR8.3)
+3. **Define acceptance criteria** — Add explicit testability criteria to critical requirements (FR1.2, FR2.2, FR2.7, FR3.2, NFR1.1, 5-10 total)
+4. **Update design doc** — Sync design v4 with finalized requirements
+5. **JSONL schema implementation** — Define exact structure per FR6.1 (blocks FR7.5)
+6. **Pattern extraction prototype** — Test FR10 workflow with existing v3 review data
+7. **Token efficiency validation** — Measure savings from clean reviews (FR1.3) + tool-based document access (FR8.3)

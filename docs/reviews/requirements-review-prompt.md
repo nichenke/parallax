@@ -1,173 +1,130 @@
-# Requirements Review Subagent Prompt
+# Requirements Review Subagent Prompt (v2)
 
-**Task:** Review the requirements document for parallax:review and evaluate:
+**Task:** Review the requirements document for parallax:review after v1 review changes were applied. Validate fixes and surface remaining issues.
 
-1. **Format & Style Quality**
-2. **High-Level Outcomes / Jobs-to-Be-Done Clarity**
-3. **Necessity Analysis: Do we need formal requirements?**
+1. **Format & Style Quality** (re-evaluate after fixes)
+2. **JTBD Effectiveness** (new section added — does it work?)
+3. **Declarative Quality** (ADR separation done — is the doc now properly declarative?)
+4. **Remaining Issues** (anything the v1 review missed or that the fixes introduced)
 
 ---
 
 ## Context
 
 **Document to review:** `docs/requirements/parallax-review-requirements-v1.md`
+**Decision log:** `docs/requirements/adr-001-requirements-v1-resolutions.md`
+**Problem statement:** `docs/problem-statements/design-orchestrator.md`
 
 **Background:**
-- This is a requirements doc for a multi-agent adversarial design review skill
-- Created after 3 design review iterations (v1, v2, v3) surfaced need for formal requirements
-- Q1-Q8 open questions were just resolved and integrated into the doc
-- Current status: Draft v1.1 (Open Questions Resolved)
+- Requirements doc for a multi-agent adversarial design review skill
+- v1 review completed, findings applied:
+  - JTBD section added (5 jobs mapped to requirement categories)
+  - Q1-Q8 resolutions extracted to ADR-001 (requirements are now declarative)
+  - FR2.7/FR2.7.1 consolidated, FR6 deduplicated (53→48 FRs)
+  - Inferred requirements marked as "Design assumption"
+  - Implementation details removed from NFR2.4
+- Current status: Draft v1.2 (Post-Review)
 
-**Key question from user:**
-> "Do we have sufficient high-level outcomes (i.e., jobs to be done) that the rest of the detailed requirements have a sanity check on why we've added them?"
-
-**Superpowers comparison:**
-The superpowers plugin goes straight to design output without formal requirements docs. What's the design principle there, and can we learn from it?
+**v1 review findings that were applied:**
+- Format: Redundancy in FR2.7/FR2.7.1, FR6.2/FR6.7 duplication, NFR2.4 over-specification
+- JTBD: No outcomes section existed, 10% of requirements weakly traceable
+- Necessity: Keep doc, but separate decision rationale from declarative requirements
 
 ---
 
 ## Review Focus Areas
 
-### 1. Format & Style
+### 1. Format & Style (Re-Evaluation)
 
-**Evaluate:**
-- Is the structure clear and navigable?
+**v1 found 5 issues. Verify fixes:**
+- FR2.7/FR2.7.1 consolidation — is the merged requirement clear?
+- FR6 reorder/dedup — is the new grouping logical? Any information lost?
+- NFR2.4 cleanup — does the outcome statement still capture the requirement?
+- Inferred requirements (NFR1.1, NFR1.2, C1.4) — are "Design assumption" labels clear?
+- Decision Log section — does the summary table + ADR link work?
+
+**Also evaluate (fresh eyes):**
 - Are requirements atomic and testable?
 - Is traceability (source citations) helpful or cluttered?
-- Are rationales compelling or boilerplate?
-- Is the "Resolved Questions" section useful or should resolutions be inline?
-
-**Look for:**
-- Redundancy (same requirement stated multiple ways)
-- Ambiguity (unclear success criteria)
-- Over-specification (implementation details leaking into requirements)
-- Under-specification (missing acceptance criteria)
+- Any NEW redundancy or ambiguity introduced by the edits?
 
 ---
 
-### 2. High-Level Outcomes / Jobs-to-Be-Done
+### 2. JTBD Effectiveness
 
-**The critical question:**
-Does this requirements doc answer: **"What problem are we solving and why?"**
-
-**Current state:**
-- Problem statement exists in `docs/problem-statements/design-orchestrator.md`
-- Requirements doc jumps straight to FR1-FR10, NFR1-NFR6
-- No explicit "Jobs-to-Be-Done" or outcome-focused section
-
-**What's missing (potentially):**
-- User stories or scenarios ("As a designer, I want X so that Y")
-- Success metrics ("Review catches 80% of design flaws before implementation")
-- Value proposition ("Reduces design iteration time from days to hours")
+**The new JTBD section maps 5 pain points to requirement categories.**
 
 **Evaluate:**
-1. Can you trace each requirement back to a user need or outcome?
-2. Are there requirements that feel unmotivated (no clear "why")?
-3. Would adding a "Jobs-to-Be-Done" section at the top provide a sanity check?
+1. Do the 5 jobs cover the full scope of the requirements? (Any FRs/NFRs orphaned from a job?)
+2. Is the pain→solution→requirements mapping convincing?
+3. Does the "User outcome" summary line capture the value proposition?
+4. Can you trace EACH requirement back to at least one job? (List any orphans)
+5. Are the jobs themselves well-scoped? (Too broad? Too narrow? Overlapping?)
 
-**Example of what might be missing:**
-
-```markdown
-## Jobs-to-Be-Done
-
-**Job 1: Catch design flaws before implementation**
-- User: Engineering team designing new features
-- Goal: Identify assumptions, edge cases, and contradictions before writing code
-- Success: 80% of design flaws caught in review, not production
-- Requirements that serve this: FR1-FR3, FR9, NFR4
-
-**Job 2: Track design iteration progress**
-- User: Designer iterating on design based on feedback
-- Goal: Know which findings are resolved vs new vs persisting
-- Success: Designer can answer "Did I fix the issues?" without manual cross-reference
-- Requirements that serve this: FR5, FR10
-
-**Job 3: Enable eval-driven quality improvement**
-- User: Skill developer tuning reviewer prompts
-- Goal: Measure prompt effectiveness, iterate based on data
-- Success: Can correlate prompt changes with finding quality
-- Requirements that serve this: NFR2, NFR5, NFR6
-```
-
-**Question for review:**
-Without this framing, do the 53 functional requirements + 26 non-functional requirements feel anchored to real needs, or like feature creep?
+**Key test:** Read only the JTBD section. Could someone understand what this skill does and why, without reading the full requirements?
 
 ---
 
-### 3. Necessity Analysis: Do We Need Formal Requirements?
+### 3. Declarative Quality
 
-**The superpowers principle:**
-Superpowers plugin goes straight to design/implementation without formal requirements docs. Skills are defined by their prompts and code. Why does this work?
+**Q1-Q8 resolutions were extracted to ADR-001. The requirements doc should now be declarative (WHAT, not WHY-WE-DECIDED-THIS).**
 
-**Hypothesis:**
-- Skills are small enough that requirements fit in prompt context
-- Iteration is cheap (change prompt, test, repeat)
-- Users provide requirements inline ("I want X to do Y")
-- Requirements are implicit in test cases
+**Evaluate the requirements doc:**
+1. Does it read as "what to build" without decision archaeology?
+2. Are there still references to Q-resolutions or session history that belong in the ADR?
+3. Is the Decision Log section (summary table + ADR link) the right level of cross-reference?
+4. Do Source citations still reference MEMORY.md or session-specific context? (These should point to design docs or ADR)
 
-**For parallax:review:**
-- Complex multi-agent orchestration (not a simple skill)
-- Multiple decision points resolved (Q1-Q8)
-- Eval framework needs stable requirements for testing
-- 3 review iterations already showed requirements drift (findings like "JSONL decided but not documented")
+**Evaluate the ADR:**
+1. Is the ADR format clear? (Question → Alternatives → Decision → Rationale → Impact)
+2. Does the Consequences section accurately capture what was added/removed?
+3. Are there any decisions in the ADR that should be promoted to the requirements doc as constraints?
 
-**Questions to evaluate:**
+---
 
-1. **Could we eliminate this doc?**
-   - Put high-level outcomes in CLAUDE.md
-   - Put design decisions in design doc
-   - Put Q1-Q8 resolutions in MEMORY.md
-   - Just build and iterate
+### 4. Remaining Issues
 
-2. **What value does this doc provide?**
-   - Single source of truth for "what are we building?"
-   - Traceability (reviewers can cite FR5.1 instead of "the design says...")
-   - Eval framework anchor (test against requirements, not just "did it work?")
-   - Prevents scope creep (if it's not in requirements, it's out of scope)
-
-3. **Is there a middle ground?**
-   - High-level outcomes (Jobs-to-Be-Done) in CLAUDE.md
-   - Detailed requirements in design doc
-   - This doc becomes redundant?
-
-4. **What would break if we deleted this doc?**
-   - Finding phase classification (FR2.5-FR2.7) — would reviewers know how to classify?
-   - JSONL schema (FR6) — would implementer know what fields are required?
-   - Eval framework (NFR5, NFR6) — would tester know what to measure?
-
-**Key insight to surface:**
-If requirements are "stable enough to delete," they're documentation, not requirements. If they're changing frequently (Q1-Q8 resolutions), they're active design decisions that need a home.
+**Look for anything the v1 review missed:**
+- Requirements that contradict each other
+- Requirements that duplicate constraints or design doc content
+- Missing acceptance criteria (how would you test this requirement?)
+- Scope creep signals (requirements that don't serve any JTBD job)
+- NFR5/NFR6 meta-requirements: are these properly distinguished from user-facing requirements?
 
 ---
 
 ## Output Format
 
-**Produce 3 sections:**
+**Produce 4 sections:**
 
-### 1. Format & Style Findings
-- List specific issues (redundancy, ambiguity, over/under-specification)
-- Suggest improvements (restructuring, consolidation, clarification)
-- Rate overall clarity: Clear | Needs Work | Confusing
+### 1. Fix Verification
+- For each v1 finding: Confirmed Fixed | Partially Fixed | Regression
+- Any information lost in the edits?
 
-### 2. Jobs-to-Be-Done Gap Analysis
-- Are high-level outcomes explicit? (Yes/No + evidence)
-- Can you trace requirements to user needs? (% traceable)
-- Recommend: Add JTBD section? Inline outcomes? Leave as-is?
-- Identify unmotivated requirements (if any)
+### 2. JTBD Assessment
+- Coverage: % of requirements mapped to a job
+- Orphaned requirements (not served by any job)
+- Job quality: Well-scoped | Too broad | Too narrow | Overlapping
+- Standalone readability: Can JTBD section stand alone? (Yes/No)
 
-### 3. Necessity Assessment
-- Superpowers comparison: What can we learn?
-- Value this doc provides (specific examples)
-- Risks of eliminating this doc (what breaks?)
-- Recommendation: Keep | Consolidate into CLAUDE.md/design doc | Restructure
+### 3. Declarative Quality
+- Requirements doc: Declarative | Still has decision archaeology | Mixed
+- ADR quality: Clear | Needs work
+- Cross-reference level: Right | Too much | Too little
+
+### 4. Remaining Issues
+- List as: [Severity: Critical|Important|Minor] Description
+- Include requirement ID where applicable
+- Suggest fix for each
 
 ---
 
 ## Success Criteria
 
 Your review helps answer:
-1. **Format:** Is this requirements doc well-structured and clear?
-2. **Motivation:** Can we trace requirements back to user needs?
-3. **Necessity:** Should we have formal requirements, or follow superpowers pattern?
+1. **Fixes:** Did the v1 review changes actually improve the doc?
+2. **JTBD:** Does the new section effectively anchor requirements to user needs?
+3. **Separation:** Is the requirements/ADR split clean?
+4. **Gaps:** What still needs work before this doc is implementation-ready?
 
-Output should be concise, evidence-based, and actionable.
+Output should be concise, evidence-based, and actionable. ~1500-2000 words.
