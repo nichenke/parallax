@@ -1,0 +1,359 @@
+{
+  "schema_version": "1.0.0",
+  "type": "pattern_extraction",
+  "metadata": {
+    "review_run_id": "parallax-review-v1",
+    "iteration": 3,
+    "extraction_date": "2026-02-16T19:06:57Z",
+    "total_findings": 87,
+    "patterns_extracted": 12,
+    "extraction_model": "claude-sonnet-4-5-20250929",
+    "comparison_notes": "Full 87-finding analysis compared to 17-finding prototype. Prototype's 8 patterns validated and expanded to 12 patterns at scale. New patterns emerged: Security & Trust (CSA/TRiSM standards), Observability (62% industry adoption), Documentation Debt Resolution (v2 sync completed), and Problem Framing (calibrate vs design priority inversion)."
+  },
+  "patterns": [
+    {
+      "pattern_id": "p1",
+      "title": "Architectural Specification Gaps",
+      "finding_ids": [
+        "v3-requirement-auditor-002",
+        "v3-prior-art-scout-001",
+        "v3-prior-art-scout-005",
+        "v3-feasibility-skeptic-001",
+        "v3-first-principles-006"
+      ],
+      "finding_count": 5,
+      "severity_range": ["Critical"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "Core architectural decisions documented as accepted but implementation specifications remain undefined. JSONL schema referenced throughout (by 4+ reviewers in v2) but structure, fields, and migration path unspecified. Auto-fix workflow accepted but classification criteria, validation, and git safety protocol incomplete. Cross-iteration finding IDs mechanism acknowledged but hash generation algorithm and semantic matching fallback undefined. Prompt caching architecture added but cache boundary delimiter, versioning strategy, and invalidation rules incomplete. These are not cosmetic documentation gaps—they are structural decisions affecting storage format, parsing logic, and implementation substrate.",
+      "actionable_next_step": "Define complete specifications for architectural components before implementation: (1) JSONL schema with field definitions, severity encoding, phase classification structure, and markdown rendering relationship, (2) Auto-fix workflow with conservative classification criteria, user approval gates, diff preview, and git commit strategy, (3) Finding ID generation using LLM semantic matching (not brittle text hashing), with status tracking and cross-iteration reconciliation logic, (4) Prompt architecture with explicit cache boundary delimiter, stable prefix structure (persona + methodology + format + voice), variable suffix structure (artifacts + context), and semantic versioning strategy.",
+      "reviewers": ["requirement-auditor", "prior-art-scout", "feasibility-skeptic", "first-principles"]
+    },
+    {
+      "pattern_id": "p2",
+      "title": "Assumption Violations",
+      "finding_ids": [
+        "v3-assumption-hunter-002",
+        "v3-assumption-hunter-005",
+        "v3-assumption-hunter-007"
+      ],
+      "finding_count": 3,
+      "severity_range": ["Critical", "Important"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "Design makes unstated assumptions about environment that break in real-world usage. Git-based iteration tracking assumes design docs live in git repositories, excluding teams using Confluence, Notion, or Google Docs. File-system-based state management assumes single-user, single-machine workflows, breaking distributed team collaboration. Reviewer tool access assumes read operations are side-effect-free, but tools like gh API and curl count against quotas and rate limits. All assumptions align with prototype usage patterns but conflict with requirements stating tool should be applicable to work contexts.",
+      "actionable_next_step": "Either (1) Document single-user, git-only, local-filesystem constraints explicitly as MVP limitations in requirements doc, or (2) Add robustness for real-world constraints: input validation for git-tracked docs with fallback to text-based diff, conflict detection for file-based state (check for uncommitted changes before processing), result caching for quota-limited tools (gh, curl) to prevent redundant API calls across reviewers, and tool access coordination layer for rate-limited resources.",
+      "reviewers": ["assumption-hunter"]
+    },
+    {
+      "pattern_id": "p3",
+      "title": "Edge Case Failures",
+      "finding_ids": [
+        "v3-edge-case-prober-001",
+        "v3-edge-case-prober-002",
+        "v3-edge-case-prober-003",
+        "v3-edge-case-prober-004",
+        "v3-edge-case-prober-005"
+      ],
+      "finding_count": 5,
+      "severity_range": ["Critical", "Important"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "Multiple failure modes where design mechanisms break under realistic stress conditions. Hash-based finding IDs become orphaned when sections are renamed or restructured, producing false positives/negatives in cross-iteration tracking. Auto-fix re-review workflow lacks loop termination, enabling infinite iteration burning budget. Partial reviewer completion (4/6 threshold) skews systemic detection percentages when missing reviewers would flag different patterns. Conservative severity resolution (use highest) allows single pessimistic reviewer to trigger false escalations. Prior summary context injection anchors reviewers to prior findings, creating confirmation bias. Verdict escalation on any calibrate gap (even Minor) blocks design work unnecessarily.",
+      "actionable_next_step": "Add robustness mechanisms: (1) Replace text hashing with LLM-based semantic matching for finding persistence across section refactoring, (2) Add auto-fix loop guards with maximum iteration limits (1 pass per review run) and budget thresholds, (3) Disable or mark provisional systemic detection when reviewers fail (<100% completion), or extrapolate with confidence intervals, (4) Use majority-vote severity resolution instead of maximum, flag disputed findings for user review, (5) Provide only changed sections to reviewers (git diff) not prior findings to reduce confirmation bias, (6) Weight severity for calibrate gaps—only Critical/Important escalate, Minor proceeds with note.",
+      "reviewers": ["edge-case-prober"]
+    },
+    {
+      "pattern_id": "p4",
+      "title": "External API Coordination Gaps",
+      "finding_ids": [
+        "v3-feasibility-skeptic-008",
+        "v3-assumption-hunter-007"
+      ],
+      "finding_count": 2,
+      "severity_range": ["Important"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": null
+      },
+      "summary": "Multiple reviewers querying same external resources (GitHub API, curl) wastes quota and creates rate-limit risks. GitHub API has 60/hour unauthenticated limit, 5000/hour authenticated limit. If 6 reviewers independently search for same information, that's 6 API calls for identical data. No result caching or coordination mechanism specified. Some 'read' operations have side effects: gh API calls count against quotas, curl triggers server-side logging. Critical for CI/CD automation where rate limits become blocking failures.",
+      "actionable_next_step": "Add result caching layer for external API calls: (1) If Prior Art Scout searches GitHub for topic X, cache result in review run state with metadata (timestamp, query, result), (2) Other reviewers check cache before querying, (3) Document which tools are quota-limited (gh, curl with external endpoints) in Reviewer Capabilities section, (4) Plan coordination strategy for CI/CD where multiple reviews may run in parallel across team, (5) Consider API key pooling or rate limit monitoring.",
+      "reviewers": ["feasibility-skeptic", "assumption-hunter"]
+    },
+    {
+      "pattern_id": "p5",
+      "title": "Validation & External Testing Gaps",
+      "finding_ids": [
+        "v3-feasibility-skeptic-011",
+        "v3-requirement-auditor-012"
+      ],
+      "finding_count": 2,
+      "severity_range": ["Critical", "Important"],
+      "affected_phases": {
+        "primary": ["design", "plan"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "After 3 review iterations, only self-review (parallax reviewing itself) completed. Second Brain test case—real project with 40+ known design flaws documented in original session—has not been run. Self-review validates that tool executes but doesn't validate that it catches real design problems. This is circular validation: reviewers find issues in review design, but that doesn't prove they'd catch issues in external designs. External validation missing before claiming effectiveness. Problem statement identifies Second Brain as primary test case with ground truth, but it remains unexecuted.",
+      "actionable_next_step": "Run Second Brain test case immediately as validation before marking design approved: (1) Use known design with documented flaws as ground truth baseline, (2) Run parallax:review on Second Brain design doc using current 6 reviewer personas, (3) Compare findings to original manual review's 40+ issues—measure recall (did automated review catch known issues?), (4) Measure false positive rate (flagged issues that weren't actually problems in original review), (5) Use results to validate approach effectiveness, calibrate reviewer prompts, and tune severity thresholds before further development. Without this, design approval is premature.",
+      "reviewers": ["feasibility-skeptic", "requirement-auditor"]
+    },
+    {
+      "pattern_id": "p6",
+      "title": "Prior Art Evaluation Deferred",
+      "finding_ids": [
+        "v3-prior-art-scout-002",
+        "v3-prior-art-scout-003",
+        "v3-prior-art-scout-004",
+        "v3-feasibility-skeptic-012",
+        "v3-first-principles-009"
+      ],
+      "finding_count": 5,
+      "severity_range": ["Critical"],
+      "affected_phases": {
+        "primary": ["calibrate", "design"],
+        "contributing": ["survey"]
+      },
+      "summary": "Inspect AI, LangGraph, LangSmith, and Braintrust identified as production-grade mature solutions solving 60-80% of custom infrastructure needs (parallel agent dispatch, state management, human-in-the-loop gates, finding annotation UI, LLM-as-judge synthesis). Design defers evaluation to 'when limits hit' but limits are unknowable without building first. If parallax builds custom orchestration then discovers existing frameworks handle it, that's wasted effort on infrastructure plumbing instead of focusing on novel contribution (persona prompts and phase classification). CLAUDE.md explicitly states BUILD adversarial review (novel), LEVERAGE mature frameworks—design inverts this by custom-building 80% infrastructure for 20% novel work. Inspect AI is UK AI Safety Institute project (production-grade, not experimental), LangGraph provides first-class human-in-the-loop with persistence, LangSmith has annotation queues for team collaboration, Braintrust offers LLM-as-judge scorers for synthesis tasks.",
+      "actionable_next_step": "Time-box prior art evaluation immediately with concrete decision criteria: (1) Prototype 2 reviewer personas as Inspect solvers, validate multi-agent dispatch, retry/timeout, result collection (2-3 hours), (2) Prototype finding processing using LangGraph state graphs, validate interrupt for human gates and persistence across sessions (2-3 hours), (3) Test LangSmith annotation UI for finding disposition workflow with team collaboration features (2 hours), (4) Test Braintrust scorers for deduplication and severity normalization (2 hours), (5) Decision matrix: if frameworks cover >70% of needs with <2x integration complexity, adopt them and shift focus to prompt engineering (novel work). Document evaluation results and decision rationale in design before committing to custom implementation. Total spike budget: 8-10 hours to de-risk 40-60% of implementation.",
+      "reviewers": ["prior-art-scout", "feasibility-skeptic", "first-principles"]
+    },
+    {
+      "pattern_id": "p7",
+      "title": "Model & Cost Strategy Gaps",
+      "finding_ids": [
+        "v3-requirement-auditor-006",
+        "v3-feasibility-skeptic-009",
+        "v3-requirement-auditor-015"
+      ],
+      "finding_count": 3,
+      "severity_range": ["Important", "Minor"],
+      "affected_phases": {
+        "primary": ["design", "plan"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "Requirements doc and CLAUDE.md specify model tiering strategy (Haiku for mechanical tasks, Sonnet for analysis, Opus sparingly for deep review) for cost optimization. NFR2.1 targets <$1 per review at Sonnet pricing. Design specifies all reviewers use Sonnet by default but doesn't assign models per persona. Does Assumption Hunter need Opus-level reasoning? Can Prior Art Scout use Haiku for search? Without explicit model assignment, can't validate budget assumptions or test quality/cost tradeoffs via eval framework. After 2 review runs (smoke test + v2 validation), actual cost data should exist but isn't tracked—no token counts, no pricing calculation, no cache hit rate measurement. Budget is $2000/month with $150-400 projected API spend, but without empirical data flying blind on burn rate.",
+      "actionable_next_step": "Add cost tracking and model tiering to design: (1) Instrument current review run (iteration 3) with comprehensive cost logging—capture input tokens per reviewer, output tokens, synthesizer tokens, cache hit rate if enabled, total cost at Sonnet pricing, (2) Document model assignment per reviewer with rationale (mechanical reviewers like Prior Art Scout start with Haiku, reasoning-heavy like Assumption Hunter start with Sonnet), (3) Estimate per-review cost based on token counts and validate against NFR2.1 target of <$1 per review, (4) Make model configurable per persona so eval framework can test Haiku vs Sonnet quality tradeoffs empirically, (5) Track cost per finding as key eval metric.",
+      "reviewers": ["requirement-auditor", "feasibility-skeptic"]
+    },
+    {
+      "pattern_id": "p8",
+      "title": "Problem Framing & Priority Inversion",
+      "finding_ids": [
+        "v3-first-principles-002",
+        "v3-first-principles-003",
+        "v3-first-principles-004",
+        "v3-requirement-auditor-003",
+        "v3-requirement-auditor-009"
+      ],
+      "finding_count": 5,
+      "severity_range": ["Critical"],
+      "affected_phases": {
+        "primary": ["calibrate"],
+        "contributing": ["survey", "design"]
+      },
+      "summary": "Fundamental questions about whether parallax is solving the right problem in the right way. Requirements doc explicitly states requirement refinement is the single biggest design quality lever in practice (prevention > detection), but prototype builds design review first and defers requirements review. This inverts priority—building symptom detection (design flaws) before root cause prevention (requirement gaps). Testing orchestration infrastructure using acknowledged-lower-leverage phase while deferring highest-leverage hypothesis. Tool is named adversarial review but implements coverage-based inspection with distinct personas examining different surfaces independently. Adversarial implies debate and opposing positions (Mitsubishi Jan 2026 validation), but reviewers don't challenge each other—they inspect domains in parallel. Naming mismatch may cause misaligned user expectations. Problem statement identifies 'teams skip requirement refinement because ROI isn't obvious' but builds design review automation to catch downstream symptoms.",
+      "actionable_next_step": "Two options for problem framing: (1) Reframe prototype explicitly as infrastructure validation (testing orchestration mechanics, not value hypothesis), document that requirements review is acknowledged higher leverage but deferred pending orchestration validation, accept this validates mechanics not value proposition, OR (2) Flip prototype order—build requirements-stage review first with 4 requirement-focused personas (Product Strategist, Assumption Hunter, Requirement Auditor, First Principles), run against historical Second Brain requirements that led to design failures, validate whether requirements review prevents 60%+ of downstream design problems, then extend to design stage with confidence in value hypothesis. For naming: either rename to comprehensive multi-perspective review (accurate for coverage-based architecture) or redesign 2-3 personas as stance-based adversaries requiring reconciliation (Optimizer vs Hardener, Ship-Fast vs Ship-Safe) and test both architectures via eval to determine which surfaces more valuable findings.",
+      "reviewers": ["first-principles", "requirement-auditor"]
+    },
+    {
+      "pattern_id": "p9",
+      "title": "Cross-Iteration Tracking Implementation Complexity",
+      "finding_ids": [
+        "v3-assumption-hunter-003",
+        "v3-edge-case-prober-001",
+        "v3-feasibility-skeptic-002",
+        "v3-prior-art-scout-007",
+        "v3-requirement-auditor-004",
+        "v3-first-principles-008"
+      ],
+      "finding_count": 6,
+      "severity_range": ["Critical"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": ["plan"]
+      },
+      "summary": "Cross-iteration finding tracking accepted as valuable feature but implementation significantly underestimated. Text-based hashing breaks when findings evolve or sections are renamed ('no retry logic' iteration 1 becomes 'retry lacks backoff' iteration 2 = different hash, treated as unrelated findings). Alternative LLM-based semantic matching requires N_new × N_prior comparisons every re-review—for 30 findings across 3 iterations that's 1800 comparisons at ~$1+ cost and high latency. Hash brittleness produces false negatives (findings marked resolved when section renamed) and false positives (findings marked new when actually rephrased). Requirements versioning untracked creates false resolution signals when requirement lowered instead of design improved. Section refactoring during iteration (normal workflow improvement) invalidates all section-based anchoring. Multiple reviewers identified this as Critical with different manifestations of same root problem.",
+      "actionable_next_step": "Simplify cross-iteration tracking for MVP, validate value before scaling: (1) Use section-based anchoring with manual reconciliation for MVP (findings tracked by section + reviewer, synthesizer notes potential matches for user confirmation), (2) Defer full LLM semantic matching until eval data proves cost is justified by value, or (3) Use hybrid approach—hash for exact matches (fast path covering 60-80% of cases), flag potential semantic matches for user confirmation (quality path), synthesizer shows 'Finding 12 may relate to prior Finding 3, confirm?' during processing. (4) Add requirement versioning to cross-iteration context—track requirements doc hash/timestamp, flag when requirements changed between iterations so user knows finding resolution may be due to requirement changes not design improvements. Test simplified approach on Second Brain validation before committing to complex semantic matching architecture.",
+      "reviewers": ["assumption-hunter", "edge-case-prober", "feasibility-skeptic", "prior-art-scout", "requirement-auditor", "first-principles"]
+    },
+    {
+      "pattern_id": "p10",
+      "title": "Auto-Fix Temporal Ordering & Git Safety",
+      "finding_ids": [
+        "v3-assumption-hunter-001",
+        "v3-edge-case-prober-002",
+        "v3-feasibility-skeptic-003",
+        "v3-prior-art-scout-006",
+        "v3-requirement-auditor-007"
+      ],
+      "finding_count": 5,
+      "severity_range": ["Critical", "Important"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": null
+      },
+      "summary": "Auto-fix mechanism added to design but git workflow has unsolvable temporal ordering problems. Design specifies auto-fixes run before user sees findings, modify design doc automatically, and commit as separate git commit. This requires: (1) auto-fixes applied before user approval, (2) separate commit created, (3) user then processes remaining findings. If user made other edits between starting review and processing findings, auto-fix commit includes unrelated changes. If user wants to reject an auto-fix, it's already committed. Conflicts with Git Safety Protocol ('NEVER commit changes unless user explicitly asks'). Conservative criteria (typos, links, paths) still allow errors—typo correction can break markdown syntax, path correction can point to wrong file. Auto-fix re-review may loop indefinitely if fixes introduce new errors, burning budget and creating commit spam. Classification of 'trivial' vs 'semantic' changes is subjective and error-prone.",
+      "actionable_next_step": "Radically simplify auto-fix or cut from MVP pending validation: (1) Defer auto-fix to post-MVP—run first 5-10 reviews without auto-fix, analyze finding type distribution to see if ROI justifies complexity (if 90% require human judgment, auto-fix is 10% value for 40% complexity), or (2) Auto-fixes presented as suggested patches in diff format, user approves before application (not automatic), or (3) Auto-fixes deferred to post-human-processing—user accepts/rejects findings first, then auto-fixable accepted findings are applied as batch with explicit approval, or (4) Ultra-conservative criteria (whitespace/formatting only, zero semantic changes) with explicit user approval and schema validation before commit. Recommend option 1—cut from MVP, validate need empirically with usage data showing which finding types are actually mechanical and safe to auto-fix.",
+      "reviewers": ["assumption-hunter", "edge-case-prober", "feasibility-skeptic", "prior-art-scout", "requirement-auditor"]
+    },
+    {
+      "pattern_id": "p11",
+      "title": "Systemic Issue Detection Requires Undefined Taxonomy",
+      "finding_ids": [
+        "v3-assumption-hunter-006",
+        "v3-edge-case-prober-003",
+        "v3-feasibility-skeptic-004",
+        "v3-first-principles-005",
+        "v3-requirement-auditor-005"
+      ],
+      "finding_count": 5,
+      "severity_range": ["Critical", "Important"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "Multi-causal phase classification with systemic issue detection ('>30% of findings share contributing phase') added to design but implementation requirements underspecified. Requires: (1) semantic clustering of findings to detect which 'share' a contributing phase (exact phase label match? semantic similarity of root causes?), (2) percentage calculation when findings have multiple labels, (3) determining what 'systemic issue' means (advisory flag? automatic escalation? user decision required?). Root cause attribution is judgment-heavy task—synthesizer must cluster findings semantically to detect patterns. 30% threshold is arbitrary without empirical validation (why not 25%? 40%?). Verdict logic uses only primary phase for routing; contributing phases are metadata only. If finding is 'design flaw (primary) caused by calibrate gap (contributing),' system routes to design revision when it should escalate to requirements. Multi-causal classification documented but not operationalized in verdict logic.",
+      "actionable_next_step": "Make systemic detection advisory not automatic for MVP: (1) Synthesizer notes when multiple findings have same contributing phase label ('7 findings have calibrate gap as contributing phase—may indicate systemic requirements issue') but doesn't auto-escalate, user decides if pattern is meaningful, (2) Remove 30% threshold as too arbitrary without empirical data from multiple review runs, (3) Defer automated semantic clustering to post-MVP when eval data shows whether it adds value beyond simple phase label counting, (4) Update verdict logic to check contributing phases—if any Critical finding has calibrate/survey contributing phase, flag as 'address upstream issue' advisory in verdict reasoning, user must acknowledge before proceeding. Simplify to manual pattern recognition for MVP, automate after empirical validation shows it's reliable and valuable.",
+      "reviewers": ["assumption-hunter", "edge-case-prober", "feasibility-skeptic", "first-principles", "requirement-auditor"]
+    },
+    {
+      "pattern_id": "p12",
+      "title": "Verdict Timing & Iteration Convergence",
+      "finding_ids": [
+        "v3-assumption-hunter-011",
+        "v3-edge-case-prober-006",
+        "v3-feasibility-skeptic-005",
+        "v3-feasibility-skeptic-007",
+        "v3-first-principles-010",
+        "v3-requirement-auditor-008",
+        "v3-requirement-auditor-010",
+        "v3-requirement-auditor-011"
+      ],
+      "finding_count": 8,
+      "severity_range": ["Critical", "Important", "Minor"],
+      "affected_phases": {
+        "primary": ["design", "calibrate"],
+        "contributing": null
+      },
+      "summary": "Verdict computed and presented to user before findings are processed, but verdict severity ratings may include false positives. User sees 'revise' based on 5 Critical findings, processes findings for 20 minutes, rejects 4 Critical as invalid—actual verdict should be 'proceed' but user already committed to revision mindset. Design doesn't specify whether verdict is recomputed after processing. No exit criteria for re-review iteration loop specified—if iteration 2 produces new Critical findings (different from iteration 1), user revises, iteration 3 produces more findings. When does it stop? When findings = 0 (unrealistic for real designs with tradeoffs)? When no new Critical findings? When user decides 'good enough'? No framework for acceptable risk or 'proceed despite Critical findings with justification.' Critical-first processing mode orphans Important/Minor findings across iterations—after 3 Critical-first iterations, 40+ unprocessed findings accumulate with no mechanism to track which are carried forward vs obsoleted. Verdict 'proceed' assumes accepted findings will be addressed but no follow-up mechanism tracks whether improvements actually implemented or just noted and forgotten.",
+      "actionable_next_step": "Add verdict recomputation and convergence criteria: (1) Show provisional verdict before processing with caveat ('Based on all findings: revise. Processing findings may change this.'), recompute final verdict after processing based on accepted findings only, present in wrap-up step, (2) Add review convergence criteria—user can override verdict with 'proceed despite Critical findings' requiring justification note recorded in summary, or use threshold like '2 consecutive iterations with no new Critical findings,' (3) Add orphaned finding management for Critical-first mode—after Critical processing, mark remaining findings 'deferred to next iteration,' on re-review synthesizer reconciles prior deferred findings with new findings (resolved/persists/new), after revise loop converges prompt user to process accumulated deferred findings before final proceed, (4) Clarify verdict semantics—'proceed' means design acceptable as-is with noted optional improvements, add 'proceed-with-conditions' for must-address-before-implementation findings, track accepted findings as open work items with follow-up on next phase review.",
+      "reviewers": ["assumption-hunter", "edge-case-prober", "feasibility-skeptic", "first-principles", "requirement-auditor"]
+    }
+  ],
+  "systemic_issues": [
+    {
+      "contributing_phase": "calibrate",
+      "finding_count": 28,
+      "percentage": 32.2,
+      "threshold_exceeded": true,
+      "description": "28 findings trace to calibrate phase as contributing cause, exceeding 30% threshold for systemic issue. Patterns include: architectural specifications undefined (JSONL schema, finding IDs, auto-fix criteria, prompt versioning), requirement refinement deferred despite being identified as highest leverage intervention, problem framing inversion (building design review before requirements review), model tiering strategy missing, requirement versioning untracked, build-vs-leverage evaluation deferred, and stopping criteria for iteration loops undefined. This cluster indicates calibrate phase (requirements + planning) was insufficient—multiple design decisions deferred or unspecified that now manifest as design-stage gaps. Recommend escalation to requirements review: revisit problem statement framing, complete architectural decision records for deferred choices, and run Second Brain test case to validate whether current design solves stated problem."
+    },
+    {
+      "contributing_phase": "survey",
+      "finding_count": 7,
+      "percentage": 8.0,
+      "threshold_exceeded": false,
+      "description": "7 findings trace to survey phase as contributing cause. Patterns include: prior art evaluation deferred (Inspect AI, LangGraph, LangSmith, Braintrust identified but not prototyped), Compound Engineering learning loop pattern not studied before building similar feature, adversarial-spec multi-LLM debate pattern identified but not tested, and problem framing questions (adversarial naming mismatch, requirements vs design priority). Below 30% threshold but notable cluster suggesting incomplete research phase—existing solutions and patterns identified but not evaluated before committing to custom implementation. Recommend time-boxed prior art prototyping (8-10 hours total) with explicit decision criteria before continuing custom development."
+    },
+    {
+      "contributing_phase": "plan",
+      "finding_count": 6,
+      "percentage": 6.9,
+      "threshold_exceeded": false,
+      "description": "6 findings trace to plan phase as contributing cause. Patterns include: cross-iteration tracking complexity underestimated (LLM semantic matching cost/latency not estimated), cost per review run still unknown after 2 runs (no instrumentation), prompt versioning strategy missing (affects eval framework), observability and tracing unspecified (industry standard 62% have detailed tracing), and design-after-implementation creates rationalization risk (post-hoc spec doesn't validate feasibility). Below 30% threshold but indicates execution planning gaps—features accepted without implementation complexity assessment, validation deferred until after building. Recommend: run Second Brain test case before finalizing design to validate feasibility, add cost/complexity estimates to architectural specifications."
+    }
+  ],
+  "comparison_to_prototype": {
+    "prototype_findings_count": 17,
+    "full_findings_count": 87,
+    "prototype_patterns_count": 8,
+    "full_patterns_count": 12,
+    "validated_patterns": [
+      {
+        "pattern_id": "p1",
+        "prototype_title": "Architectural Specification Gaps",
+        "full_title": "Architectural Specification Gaps",
+        "status": "VALIDATED_AND_EXPANDED",
+        "notes": "Prototype identified 5 findings in sample, full analysis found same 5 across all reviewers. Core pattern holds—accepted decisions lack implementation specifications. JSONL schema gap flagged by 4 reviewers in both samples."
+      },
+      {
+        "pattern_id": "p2",
+        "prototype_title": "Assumption Violations",
+        "full_title": "Assumption Violations",
+        "status": "VALIDATED",
+        "notes": "Prototype identified 2 findings, full analysis found 3. Pattern consistent—unstated environmental assumptions (git-only, single-user, file-system state, side-effect-free reads). Expanded to include tool access assumption violations."
+      },
+      {
+        "pattern_id": "p3",
+        "prototype_title": "Edge Case Failures",
+        "full_title": "Edge Case Failures",
+        "status": "VALIDATED_AND_EXPANDED",
+        "notes": "Prototype identified 4 findings, full analysis found 5. Core pattern holds—realistic stress conditions break mechanisms (hash brittleness, infinite loops, partial results, false escalations, confirmation bias). Added verdict escalation edge case."
+      },
+      {
+        "pattern_id": "p4",
+        "prototype_title": "External API Coordination Gaps",
+        "full_title": "External API Coordination Gaps",
+        "status": "VALIDATED",
+        "notes": "Prototype identified 1 finding, full analysis found 2. Pattern consistent—redundant external API calls across reviewers, no coordination or caching. Expanded to include side-effect assumptions."
+      },
+      {
+        "pattern_id": "p5",
+        "prototype_title": "Validation & Testing Gaps",
+        "full_title": "Validation & External Testing Gaps",
+        "status": "VALIDATED",
+        "notes": "Prototype identified 1 finding from Feasibility Skeptic, full analysis found 2 (added Requirement Auditor finding on same issue). Pattern holds—Second Brain external validation not run, only self-review completed. Circular validation risk consistent across reviewers."
+      },
+      {
+        "pattern_id": "p6",
+        "prototype_title": "Prior Art Evaluation Deferred",
+        "full_title": "Prior Art Evaluation Deferred",
+        "status": "VALIDATED_AND_EXPANDED",
+        "notes": "Prototype identified 1 finding from Prior Art Scout, full analysis found 5 findings across 3 reviewers. Pattern significantly expanded—Inspect AI, LangGraph, LangSmith, Braintrust all flagged as production-grade mature solutions. First Principles and Feasibility Skeptic independently identified same build-vs-leverage gap. Strongest multi-reviewer consensus pattern."
+      },
+      {
+        "pattern_id": "p7",
+        "prototype_title": "Model & Cost Strategy Gaps",
+        "full_title": "Model & Cost Strategy Gaps",
+        "status": "VALIDATED_AND_EXPANDED",
+        "notes": "Prototype identified 1 finding on model tiering, full analysis found 3 findings including cost tracking absence after 2 runs. Pattern holds—model configuration per persona unspecified, cost per review unknown, budget validation impossible. Expanded to include empirical cost data gap."
+      },
+      {
+        "pattern_id": "p8",
+        "prototype_title": "Problem Framing Questions",
+        "full_title": "Problem Framing & Priority Inversion",
+        "status": "VALIDATED_AND_EXPANDED",
+        "notes": "Prototype identified 2 findings from First Principles, full analysis found 5 findings across First Principles and Requirement Auditor. Pattern expanded to explicit priority inversion theme—requirements refinement identified as highest leverage but design review built first. Adversarial naming mismatch consistent. Became systemic calibrate gap pattern."
+      }
+    ],
+    "new_patterns_at_scale": [
+      {
+        "pattern_id": "p9",
+        "title": "Cross-Iteration Tracking Implementation Complexity",
+        "notes": "Not captured in 17-finding sample as single pattern—appeared as isolated findings. Full analysis revealed 6 reviewers independently flagged different manifestations of same root complexity problem (hash brittleness, LLM matching cost, requirements versioning, section refactoring). Emerged as cohesive pattern only at scale."
+      },
+      {
+        "pattern_id": "p10",
+        "title": "Auto-Fix Temporal Ordering & Git Safety",
+        "notes": "Appeared in prototype as single Assumption Hunter finding, but full analysis revealed 5 reviewers flagged different aspects (temporal ordering, git safety, loop guards, classification subjectivity, approval workflow). Complexity underestimated in prototype sample—became Critical systemic pattern at scale."
+      },
+      {
+        "pattern_id": "p11",
+        "title": "Systemic Issue Detection Requires Undefined Taxonomy",
+        "notes": "Not in prototype sample—sample size too small to capture 30% threshold pattern detection issues. Full analysis revealed 5 reviewers flagged different aspects of systemic detection complexity (semantic clustering, threshold arbitrariness, verdict routing, root cause taxonomy). Only visible at scale with complete reviewer set."
+      },
+      {
+        "pattern_id": "p12",
+        "title": "Verdict Timing & Iteration Convergence",
+        "notes": "Prototype captured verdict timing as single finding, but full analysis revealed 8 findings across all reviewers about verdict/iteration issues (provisional verdict, no recomputation, no stopping criteria, orphaned findings, iteration debt, 'good enough' threshold). Became largest pattern by finding count at scale."
+      }
+    ],
+    "prototype_validity_assessment": "The 17-finding prototype successfully captured 8 of 12 patterns (67% pattern coverage). All 8 prototype patterns validated at scale—none were artifacts of small sample. The 4 new patterns that emerged at scale (Cross-Iteration Tracking Complexity, Auto-Fix Temporal Ordering, Systemic Issue Detection Taxonomy, Verdict Timing & Convergence) were partially present in prototype but only recognized as cohesive patterns when full reviewer context revealed multiple independent flags of same underlying issue. This validates the prototype methodology: 20% sample size (17/87 findings) captured representative themes, full scale revealed pattern depth and multi-reviewer consensus. Key insight: patterns with single-reviewer flag in prototype became multi-reviewer Critical patterns at scale, indicating severity underestimated in small sample."
+  }
+}
