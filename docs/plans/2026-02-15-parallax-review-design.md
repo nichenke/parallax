@@ -18,7 +18,9 @@ The core hypothesis: multiple perspectives catch design gaps that single-perspec
 - **Design artifact** — markdown document (the thing being reviewed)
 - **Requirements artifact** — markdown document (what the design should satisfy)
 - **Review stage** — one of: `requirements`, `design`, `plan` (determines active personas and escalation targets)
+  - Stage guidance for standalone use: `requirements` for MoSCoW/priority docs, `design` for architecture/approach docs, `plan` for implementation/execution docs. Auto-detection deferred (YAGNI for MVP — we know the stage).
 - **Topic label** — name for the review folder
+  - Topic labels validated against safe character set (alphanumeric, hyphens, underscores only). Collision handling: timestamped folders for iteration separation.
 
 For the prototype, we build `design` stage only. The skill accepts docs as file paths or inline context.
 
@@ -26,7 +28,7 @@ For the prototype, we build `design` stage only. The skill accepts docs as file 
 - Individual reviewer files (one per persona) saved to `docs/reviews/<topic>/`
 - Synthesized summary with findings classified by severity AND pipeline phase
 - Overall verdict: `proceed` | `revise` | `escalate`
-- Interactive finding-by-finding processing with accept/reject/discuss
+- Async-first: artifacts written to disk as baseline. Interactive finding-by-finding processing (accept/reject-with-note) as convenience layer.
 
 ## Output Artifacts
 
@@ -52,10 +54,12 @@ Iteration history tracked by git (each re-review is a new commit, diffs show wha
 |---|---|---|
 | **Assumption Hunter** | Implicit assumptions, unstated dependencies, "what if X isn't true?" | "What has the designer taken for granted?" |
 | **Edge Case Prober** | Boundary conditions, failure modes, scale limits, empty/null states | "What happens when things go wrong or weird?" |
-| **Requirement Auditor** | Coverage gaps, contradictions, gold-plating, anti-goal violations | "Does this actually satisfy the requirements?" |
+| **Requirement Auditor** | Coverage gaps, contradictions, gold-plating, anti-goal violations | "Does this actually satisfy the requirements? Are the requirements themselves contradictory?" |
 | **Feasibility Skeptic** | Implementation complexity, hidden costs, simpler alternatives | "Is this buildable as described, and is it the simplest approach?" |
 | **First Principles Challenger** | Reexamine the problem from scratch, question whether the framing is right | "Are we solving the right problem? Would we design it this way starting from zero?" |
 | **Prior Art Scout** | Existing solutions, standards, libraries, build-vs-buy | "Does this already exist? Are we reinventing something we should leverage?" |
+
+Requirement Auditor auto-escalates requirement-level contradictions as calibrate gap (Critical severity). Requirements must be internally consistent before design review proceeds.
 
 ### Requirements Stage — 4 Personas
 
@@ -117,23 +121,33 @@ PM lens covers: Are success criteria measurable? Is scope right for timeline? Wh
 [What might I have missed given my assigned focus?]
 ```
 
+### Output Voice Guidelines
+
+Part of the stable prompt prefix. Applied consistently across all personas:
+- Use active voice. Lead with impact, then evidence.
+- No hedging language ("might", "could", "possibly") — state the issue directly.
+- Quantify blast radius where possible ("affects N of M endpoints", "blocks all downstream phases").
+- SRE-style framing: what breaks, what's the blast radius, what's the fix.
+- Direct and engineer-targeted. No filler.
+
 The blind spot check is self-error-detection — each reviewer explicitly asks "what am I not seeing?"
 
 ## Synthesis
 
-A **Synthesizer agent** consolidates reviewer output. Its role is purely editorial — zero judgment on content or severity.
+A **Synthesizer agent** consolidates reviewer output. Its role requires judgment — deduplication, phase classification, and contradiction surfacing all involve semantic interpretation. The synthesizer exercises editorial judgment transparently, with reasoning documented.
 
 **Responsibilities:**
 1. **Deduplicate** — group findings flagged by multiple reviewers into single entries, noting which reviewers flagged each (consensus signal)
 2. **Classify by phase** — assign each finding to the pipeline phase that failed
 3. **Surface contradictions** — when reviewers disagree, present both positions with the tension noted (user resolves)
-4. **Report severity ranges** — when reviewers rate the same issue differently, report the range ("Flagged Critical by Assumption Hunter, Important by Feasibility Skeptic"), don't editorilaize
+4. **Report severity ranges** — when reviewers rate the same issue differently, report the range ("Flagged Critical by Assumption Hunter, Important by Feasibility Skeptic"), don't editorialize
 5. **Produce summary.md** — structured summary with verdict
+6. **Resolve severity for verdict logic** — when reviewers rate the same issue differently, use highest severity in range for verdict computation (conservative). Document the range in findings for user context. User can override during processing.
 
 **The synthesizer does NOT:**
-- Override or adjust reviewer severity ratings
 - Pick winners in contradictions
 - Add its own findings
+- Suppress reviewer findings or silently downgrade severity
 
 ### Finding Phase Classification
 
@@ -144,11 +158,14 @@ A **Synthesizer agent** consolidates reviewer output. Its role is purely editori
 | **Design flaw** | Assumption violated, edge case missed, wrong approach | Revise the design |
 | **Plan concern** | Implementation issue (flagged for plan review stage) | Carry forward |
 
+Findings are classified by **primary phase** (the most actionable fix) and optional **contributing phase** (upstream cause). Example: 'Design flaw (primary) caused by calibrate gap (contributing).' This enables two actions: immediate fix and systemic upstream correction. When >30% of findings share a contributing phase, the synthesizer flags a systemic issue.
+
 ### Verdict Logic
 
-- Any Critical finding → `revise` (or `escalate` if it's a survey/calibrate gap)
+- Any Critical finding (or finding with Critical in its severity range) → `revise` (or `escalate` if it's a survey/calibrate gap)
 - Only Important/Minor → `proceed` with noted improvements
 - Survey or calibrate gap at any severity → `escalate` (the design can't be fixed without fixing upstream)
+- Severity range rule: conservative — highest severity in range determines verdict impact. If false escalations become a problem, investigate per-agent prompt tuning first.
 
 `revise` = fix the design and re-review. `escalate` = the problem is upstream, go back to requirements or research.
 
@@ -182,7 +199,7 @@ A **Synthesizer agent** consolidates reviewer output. Its role is purely editori
 [...]
 
 ## Contradictions
-[Tensions between reviewers that need human resolution]
+[Tensions between reviewers that need human resolution. Each contradiction surfaces the underlying tension explicitly and suggests tie-breaking criteria.]
 
 ## Findings by Phase
 - Survey gaps: N
@@ -194,7 +211,54 @@ A **Synthesizer agent** consolidates reviewer output. Its role is purely editori
 [Updated as user processes findings — accept/reject/discuss outcome for each]
 ```
 
+## Parallel Agent Failure Handling
+
+Reviewer dispatch expects partial failures as normal operation (API rate limits, transient network errors, model capacity issues).
+
+- **Timeout:** 60-120s per agent
+- **Retry:** 1 retry with exponential backoff for failed agents
+- **Partial results:** Proceed if minimum threshold met (4/6 agents succeed)
+- **Transparency:** Mark summary as partial if <100% reviewers completed ("5/6 reviewers completed, Feasibility Skeptic timed out")
+- **Selective re-run:** Allow re-running individual failed reviewers without redoing successful ones
+- **Schema validation:** Validate reviewer output format before synthesis; malformed output triggers retry, then fail-fast
+
+## Reviewer Prompt Architecture
+
+Reviewer prompts are structured for future prompt caching (90% input cost reduction on cache hits). Optimization deferred until prompts stabilize post-prototype, but the structure is designed now.
+
+**Stable prefix** (cacheable):
+- Persona identity and adversarial mandate
+- Methodology and review approach
+- Output format rules and constraints
+- Voice guidelines (see Per-Reviewer Output Format)
+
+**Variable suffix** (per-review):
+- Design artifact being reviewed
+- Requirements context
+- Iteration number and prior review summary (if re-review)
+- Changed sections (git diff, if available)
+
+Prompt changes to the stable prefix invalidate cache and should be tracked as versioned changes.
+
+## Cross-Iteration Finding Tracking
+
+Findings persist across review iterations with stable identifiers and status tracking.
+
+- **Finding IDs:** Stable hash derived from section + issue content. Enables cross-iteration diff.
+- **Status field:** `open` | `addressed` | `rejected` (tracked in summary)
+- **Prior context:** On re-review, previous summary.md is included in reviewer context. Reviewers explicitly note "previously flagged, now resolved" vs "new finding" vs "still an issue."
+- **Cross-iteration diff:** Summary includes section showing which prior findings are now resolved, which persist, and which are new.
+- **Changed section focus:** When git diff is available, reviewers receive it to focus extra scrutiny on newly-changed sections.
+
+## Reviewer Capabilities
+
+Each reviewer persona has access to specific tools based on their review focus. All reviewers are read-only — no write access to the repository.
+
+Tool access boundaries are specified in the stable prompt prefix per persona. Specific tool assignments are an empirical question for the eval framework — start with baseline access and expand based on observed reviewer needs during prototyping.
+
 ## UX Flow
+
+Review is async-first: all artifacts are written to disk as the baseline. Interactive processing is a convenience layer that reuses those same disk artifacts — not a separate mode.
 
 ### Step 1: Invoke
 User triggers `parallax:review`. Skill asks for:
@@ -204,12 +268,15 @@ User triggers `parallax:review`. Skill asks for:
 - Topic label for the review folder
 
 ### Step 2: Dispatch
-Skill confirms inputs, creates `docs/reviews/<topic>/`, dispatches reviewer agents in parallel (4-6 depending on stage). User sees status ("Running 6 reviewers in parallel...").
+Skill confirms inputs, creates `docs/reviews/<topic>/`, dispatches reviewer agents in parallel (4-6 depending on stage). Skill streams progress as reviewers complete ('Assumption Hunter: done [1/6]', 'Edge Case Prober: done [2/6]'). Shows elapsed time.
 
 ### Step 3: Synthesize
 Synthesizer consolidates findings into `summary.md`. Individual reviewer outputs saved to their own files. All written to disk.
 
-### Step 4: Present Summary
+### Step 4: Auto-Fix
+Synthesizer classifies findings as auto-fixable vs human-decision-required. Auto-fixable findings (typos in markdown, missing file extensions, broken internal links) are applied to the design artifact automatically. Auto-fixes are committed as a **separate git commit** from human-reviewed changes, enabling async review of what was auto-applied. The design is then re-reviewed with remaining findings only. Define auto-fixable criteria conservatively in MVP and expand based on eval data.
+
+### Step 5: Present Summary
 User sees: verdict, finding counts, critical findings listed. Then chooses processing mode:
 
 | Mode | When to use | Behavior |
@@ -217,21 +284,18 @@ User sees: verdict, finding counts, critical findings listed. Then chooses proce
 | **Critical-first** | Many findings, want fast iteration | Address Critical findings only. Send source material back for rethink. Remaining findings processed in next pass. |
 | **All findings** | Fewer findings, or tuning the reviewers | Walk through every finding one by one. |
 
-### Step 5: Process Findings
+### Step 6: Process Findings
 For each finding, presented one at a time:
 - **Accept** — finding is valid, will address
-- **Reject** — finding is wrong or not applicable (feedback for reviewer tuning)
-- **Discuss** — full back-and-forth conversation about this finding before deciding
+- **Reject with note** — finding is wrong or not applicable. Rejection note becomes calibration input to next review cycle. (Discuss mode cut from MVP — evaluate adding in v2 if eval data shows rejected findings aren't being addressed.)
 
-Discuss is a first-class interaction: the user can explore a finding in depth, ask questions, challenge the reviewer's reasoning, and then make an accept/reject decision. The skill maintains its position in the finding queue and resumes after the discussion resolves.
-
-### Step 6: Wrap Up
+### Step 7: Wrap Up
 `summary.md` updated with accept/reject dispositions for each finding.
 - If `escalate`: skill tells the user which upstream phase to revisit and why, then exits
 - If `revise`: user revises the design, re-runs `parallax:review` (new commit tracks the diff)
 - If `proceed`: design approved, move to next pipeline phase
 
-All artifacts committed to git.
+Review artifacts committed in a single git commit per review run (user confirms before commit). Structured commit message: `parallax:review — [topic] — [verdict] ([N] findings)`. Auto-fix changes use a separate commit (see Step 4).
 
 ## Pipeline Integration
 
@@ -247,13 +311,16 @@ Each stage uses the same skill, same output format, same processing workflow. On
 
 ## Prototype Scope
 
+This design is phase 1 of the orchestrator problem statement. Scope boundary: review skill only. Requirement refinement (parallax:calibrate) and full pipeline orchestration (parallax:orchestrate) are separate designs.
+
 **Build now (design stage):**
 - 6 reviewer personas (Assumption Hunter, Edge Case Prober, Requirement Auditor, Feasibility Skeptic, First Principles Challenger, Prior Art Scout)
 - Synthesizer agent
 - Finding classification by severity and phase
-- Interactive finding processing (accept/reject/discuss)
+- Interactive finding processing (accept/reject-with-note). JSONL output enables jq-based filtering by severity/persona/phase without LLM tokens.
 - Markdown output to `docs/reviews/<topic>/`
 - Critical-first and all-findings processing modes
+- Cost logging per review run in JSONL output (pre-dispatch estimates deferred until empirical cost data available)
 
 **Build later (requirements and plan stages):**
 - Product Strategist persona (requirements stage)
@@ -265,6 +332,11 @@ Each stage uses the same skill, same output format, same processing workflow. On
 **Validate with:**
 - Second Brain Design test case (3 reviews, 40+ findings in the original session)
 - Real design docs produced by the brainstorming skill
+
+**Evaluate in early eval phase:**
+- Adversarial persona pairs (stance-based, not just domain-based) — test against current coverage-based personas on same artifact (Finding 26)
+- Requirements-stage review — validate that adversarial review at requirements-time prevents downstream design failures (Finding 27)
+- Inspect AI as implementation substrate — evaluate whether Inspect's multi-agent patterns replace custom orchestration plumbing (Finding 30)
 
 ## Open Questions (for eval framework)
 
