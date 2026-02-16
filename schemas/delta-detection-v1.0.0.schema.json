@@ -1,0 +1,138 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nichenke/parallax/schemas/delta-detection-v1.0.0.schema.json",
+  "title": "Parallax Delta Detection",
+  "description": "Schema for delta detection JSON output",
+  "type": "object",
+  "required": ["schema_version", "type", "metadata", "summary", "resolved", "persisting", "new", "insights"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "type": { "const": "delta_detection" },
+    "metadata": {
+      "type": "object",
+      "required": ["comparison", "detection_date", "detection_model"],
+      "properties": {
+        "comparison": {
+          "type": "object",
+          "required": ["from_iteration", "to_iteration", "from_file", "to_file"],
+          "properties": {
+            "from_iteration": { "type": "integer", "minimum": 1 },
+            "to_iteration": { "type": "integer", "minimum": 2 },
+            "from_file": { "type": "string", "pattern": "^patterns-v\\d+\\.json$" },
+            "to_file": { "type": "string", "pattern": "^patterns-v\\d+\\.json$" }
+          }
+        },
+        "detection_date": { "type": "string", "format": "date-time" },
+        "detection_model": { "type": "string", "minLength": 1 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["resolved_patterns", "persisting_patterns", "new_patterns", "total_patterns_previous", "total_patterns_current"],
+      "properties": {
+        "resolved_patterns": { "type": "integer", "minimum": 0 },
+        "persisting_patterns": { "type": "integer", "minimum": 0 },
+        "new_patterns": { "type": "integer", "minimum": 0 },
+        "total_patterns_previous": { "type": "integer", "minimum": 0 },
+        "total_patterns_current": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "resolved": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern_id_previous", "title", "resolution_evidence", "affected_findings_resolved"],
+        "properties": {
+          "pattern_id_previous": {
+            "type": "string",
+            "pattern": "^p\\d+$"
+          },
+          "title": { "type": "string", "minLength": 1 },
+          "resolution_evidence": { "type": "string", "minLength": 1 },
+          "affected_findings_resolved": { "type": "integer", "minimum": 0 }
+        }
+      }
+    },
+    "persisting": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern_id_previous", "pattern_id_current", "title", "match_confidence", "changes", "persistence_reason"],
+        "properties": {
+          "pattern_id_previous": {
+            "type": "string",
+            "pattern": "^p\\d+$"
+          },
+          "pattern_id_current": {
+            "type": "string",
+            "pattern": "^p\\d+$"
+          },
+          "title": { "type": "string", "minLength": 1 },
+          "match_confidence": {
+            "type": "string",
+            "enum": ["high", "medium", "low"]
+          },
+          "changes": {
+            "type": "object",
+            "required": ["finding_count_previous", "finding_count_current", "severity_escalation", "new_reviewers"],
+            "properties": {
+              "finding_count_previous": { "type": "integer", "minimum": 0 },
+              "finding_count_current": { "type": "integer", "minimum": 0 },
+              "severity_escalation": { "type": "boolean" },
+              "new_reviewers": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "pattern": "^[a-z-]+$"
+                }
+              }
+            }
+          },
+          "persistence_reason": { "type": "string", "minLength": 1 }
+        }
+      }
+    },
+    "new": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["pattern_id_current", "title", "emergence_reason", "affected_findings_count", "severity_range"],
+        "properties": {
+          "pattern_id_current": {
+            "type": "string",
+            "pattern": "^p\\d+$"
+          },
+          "title": { "type": "string", "minLength": 1 },
+          "emergence_reason": { "type": "string", "minLength": 1 },
+          "affected_findings_count": { "type": "integer", "minimum": 1 },
+          "severity_range": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["Critical", "Important", "Minor"]
+            }
+          }
+        }
+      }
+    },
+    "insights": {
+      "type": "object",
+      "required": ["progress_summary", "systemic_changes"],
+      "properties": {
+        "progress_summary": { "type": "string", "minLength": 1 },
+        "systemic_changes": {
+          "type": "object",
+          "properties": {
+            "v2_systemic_issue": { "type": "string" },
+            "v3_systemic_issue": { "type": "string" },
+            "interpretation": { "type": "string", "minLength": 1 }
+          }
+        }
+      }
+    }
+  }
+}

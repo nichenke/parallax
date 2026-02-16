@@ -1,0 +1,1 @@
+{"type": "finding", "id": "invalid-id-format", "title": "Bad Finding", "severity": "VeryBad", "phase": {"primary": "design"}, "section": "Test"}

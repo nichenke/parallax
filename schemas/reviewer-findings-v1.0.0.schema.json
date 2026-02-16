@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nichenke/parallax/schemas/reviewer-findings-v1.0.0.schema.json",
+  "title": "Parallax Reviewer Findings",
+  "description": "Schema for reviewer findings JSONL output",
+  "type": "object",
+  "oneOf": [
+    { "$ref": "#/$defs/finding" },
+    { "$ref": "#/$defs/blind_spot_check" },
+    { "$ref": "#/$defs/reviewer_metadata" }
+  ],
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "required": ["type", "id", "title", "severity", "phase", "section", "issue", "why_it_matters", "suggestion"],
+      "properties": {
+        "type": { "const": "finding" },
+        "id": {
+          "type": "string",
+          "pattern": "^v\\d+-[a-z-]+-\\d{3}$",
+          "description": "Format: v{iteration}-{reviewer}-{sequence}"
+        },
+        "title": { "type": "string", "minLength": 1 },
+        "severity": {
+          "type": "string",
+          "enum": ["Critical", "Important", "Minor"]
+        },
+        "phase": {
+          "type": "object",
+          "required": ["primary", "contributing"],
+          "properties": {
+            "primary": {
+              "type": "string",
+              "enum": ["survey", "calibrate", "design", "plan"]
+            },
+            "contributing": {
+              "oneOf": [
+                { "type": "null" },
+                { "type": "string", "enum": ["survey", "calibrate", "design", "plan"] }
+              ]
+            }
+          }
+        },
+        "section": { "type": "string", "minLength": 1 },
+        "issue": { "type": "string", "minLength": 1 },
+        "why_it_matters": { "type": "string", "minLength": 1 },
+        "suggestion": { "type": "string", "minLength": 1 },
+        "disposition": {
+          "type": "string",
+          "enum": ["accepted", "rejected"]
+        },
+        "disposition_note": { "type": "string" },
+        "disposition_date": {
+          "type": "string",
+          "format": "date-time"
+        },
+        "disposition_by": {
+          "type": "string",
+          "enum": ["user", "auto"]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "disposition": { "type": "string" } },
+            "required": ["disposition"]
+          },
+          "then": {
+            "required": ["disposition_date", "disposition_by"]
+          }
+        }
+      ]
+    },
+    "blind_spot_check": {
+      "type": "object",
+      "required": ["type", "content"],
+      "properties": {
+        "type": { "const": "blind_spot_check" },
+        "content": { "type": "string", "minLength": 1 }
+      }
+    },
+    "reviewer_metadata": {
+      "type": "object",
+      "required": ["type", "reviewer", "status", "partial_findings_count"],
+      "properties": {
+        "type": { "const": "reviewer_metadata" },
+        "reviewer": {
+          "type": "string",
+          "pattern": "^[a-z-]+$"
+        },
+        "status": {
+          "type": "string",
+          "enum": ["completed", "failed", "partial"]
+        },
+        "error": { "type": "string" },
+        "error_message": { "type": "string" },
+        "partial_findings_count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": { "status": { "enum": ["failed", "partial"] } }
+          },
+          "then": {
+            "required": ["error"]
+          }
+        }
+      ]
+    }
+  }
+}

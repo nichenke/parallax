@@ -1,0 +1,127 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nichenke/parallax/schemas/pattern-extraction-v1.0.0.schema.json",
+  "title": "Parallax Pattern Extraction",
+  "description": "Schema for pattern extraction JSON output",
+  "type": "object",
+  "required": ["schema_version", "type", "metadata", "patterns", "systemic_issues"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$"
+    },
+    "type": { "const": "pattern_extraction" },
+    "metadata": {
+      "type": "object",
+      "required": ["review_run_id", "iteration", "extraction_date", "total_findings", "patterns_extracted", "extraction_model"],
+      "properties": {
+        "review_run_id": { "type": "string", "minLength": 1 },
+        "iteration": { "type": "integer", "minimum": 1 },
+        "extraction_date": { "type": "string", "format": "date-time" },
+        "total_findings": { "type": "integer", "minimum": 0 },
+        "patterns_extracted": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 15,
+          "description": "Maximum 15 patterns per FR10.1"
+        },
+        "extraction_model": { "type": "string", "minLength": 1 }
+      }
+    },
+    "patterns": {
+      "type": "array",
+      "maxItems": 15,
+      "items": {
+        "type": "object",
+        "required": ["pattern_id", "title", "finding_ids", "finding_count", "severity_range", "affected_phases", "summary", "actionable_next_step", "reviewers"],
+        "properties": {
+          "pattern_id": {
+            "type": "string",
+            "pattern": "^p\\d+$",
+            "description": "Format: p1, p2, ..., p15"
+          },
+          "title": { "type": "string", "minLength": 1 },
+          "finding_ids": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^v\\d+-[a-z-]+-\\d{3}$"
+            }
+          },
+          "finding_count": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "severity_range": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "enum": ["Critical", "Important", "Minor"]
+            }
+          },
+          "affected_phases": {
+            "type": "object",
+            "required": ["primary", "contributing"],
+            "properties": {
+              "primary": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": ["survey", "calibrate", "design", "plan"]
+                }
+              },
+              "contributing": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "type": "array",
+                    "items": {
+                      "type": "string",
+                      "enum": ["survey", "calibrate", "design", "plan"]
+                    }
+                  }
+                ]
+              }
+            }
+          },
+          "summary": { "type": "string", "minLength": 1 },
+          "actionable_next_step": { "type": "string", "minLength": 1 },
+          "reviewers": {
+            "type": "array",
+            "minItems": 1,
+            "items": {
+              "type": "string",
+              "pattern": "^[a-z-]+$"
+            }
+          }
+        }
+      }
+    },
+    "systemic_issues": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["contributing_phase", "finding_count", "percentage", "threshold_exceeded", "description"],
+        "properties": {
+          "contributing_phase": {
+            "type": "string",
+            "enum": ["survey", "calibrate", "design", "plan"]
+          },
+          "finding_count": { "type": "integer", "minimum": 1 },
+          "percentage": {
+            "type": "number",
+            "minimum": 0,
+            "maximum": 100
+          },
+          "threshold_exceeded": {
+            "type": "boolean",
+            "description": "True if >30% per FR2.7"
+          },
+          "description": { "type": "string", "minLength": 1 }
+        }
+      }
+    }
+  }
+}
