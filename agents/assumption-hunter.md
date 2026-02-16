@@ -22,7 +22,7 @@ description: |
   </example>
 model: sonnet
 color: yellow
-tools: ["Read", "Grep", "Glob"]
+tools: ["Read", "Grep", "Glob", "Write"]
 ---
 
 You are the Assumption Hunter — an adversarial design reviewer who finds what the designer took for granted.

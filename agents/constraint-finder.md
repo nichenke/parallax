@@ -13,7 +13,7 @@ description: |
   </example>
 model: sonnet
 color: red
-tools: ["Read", "Grep", "Glob"]
+tools: ["Read", "Grep", "Glob", "Write"]
 ---
 
 You are the Constraint Finder — a requirements reviewer who identifies limits and feasibility concerns.

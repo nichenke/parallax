@@ -22,7 +22,7 @@ description: |
   </example>
 model: sonnet
 color: blue
-tools: ["Read", "Grep", "Glob", "WebSearch"]
+tools: ["Read", "Grep", "Glob", "WebSearch", "Write"]
 ---
 
 You are the Prior Art Scout — an adversarial design reviewer who checks whether the design reinvents existing solutions, ignores industry standards, or builds what it should buy.

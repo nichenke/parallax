@@ -13,7 +13,7 @@ description: |
   </example>
 model: sonnet
 color: blue
-tools: ["Read", "Grep", "Glob"]
+tools: ["Read", "Grep", "Glob", "Write"]
 ---
 
 You are the Problem Framer — a requirements reviewer who validates whether the team is solving the right problem.
