@@ -153,6 +153,16 @@ Context compaction is a known constraint. This repo may be worked on from multip
 - **End of session** — promote any important decisions from memory to CLAUDE.md (so they travel with git)
 - **Brainstorm capture** — raw session notes go in `docs/`, distilled decisions go in CLAUDE.md
 
+## Model Tiering Strategy
+
+- **`opusplan` mode:** Opus for planning/analysis, Sonnet for execution. Default for this repo.
+- **Planning phases** (Opus): Brainstorming, requirements review, design review, architecture decisions, finding synthesis
+- **Execution phases** (Sonnet): Code edits, file operations, mechanical subagent tasks, formatting
+- **Subagents:** Default to Sonnet (`model: "sonnet"` in Task tool) unless the task requires deep analysis
+- **Superpowers integration:** The `using-superpowers` skill intercepts `EnterPlanMode` and routes through brainstorming. Plan mode = Opus engagement for complex analysis.
+
+<!-- TODO: Investigate Codex equivalent of opusplan model tiering. Codex CLI may have different model routing. Track in Issue #4. -->
+
 ## Workflow Preferences
 
 - **Local-first development** — create files locally, test, then commit
