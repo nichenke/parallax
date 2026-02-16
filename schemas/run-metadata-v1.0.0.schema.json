@@ -1,0 +1,155 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/nichenke/parallax/schemas/run-metadata-v1.0.0.schema.json",
+  "title": "Parallax Run Metadata",
+  "description": "Schema for run metadata JSONL output",
+  "type": "object",
+  "required": ["schema_version", "type", "run", "prompts", "model", "reviewers", "summary", "parameters"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "pattern": "^\\d+\\.\\d+\\.\\d+$",
+      "description": "Semantic version (MAJOR.MINOR.PATCH)"
+    },
+    "type": { "const": "run_metadata" },
+    "run": {
+      "type": "object",
+      "required": ["id", "topic", "iteration", "date", "stage", "design_doc", "requirements_doc"],
+      "properties": {
+        "id": { "type": "string", "minLength": 1 },
+        "topic": { "type": "string", "minLength": 1 },
+        "iteration": { "type": "integer", "minimum": 1 },
+        "date": { "type": "string", "format": "date-time" },
+        "stage": {
+          "type": "string",
+          "enum": ["requirements", "design", "plan"]
+        },
+        "design_doc": { "type": "string", "minLength": 1 },
+        "requirements_doc": { "type": "string", "minLength": 1 }
+      }
+    },
+    "prompts": {
+      "type": "object",
+      "required": ["stable_version", "calibration_version"],
+      "properties": {
+        "stable_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        },
+        "calibration_version": {
+          "type": "string",
+          "pattern": "^\\d+\\.\\d+\\.\\d+$"
+        }
+      }
+    },
+    "model": {
+      "type": "object",
+      "required": ["vendor", "default_model_id", "overrides"],
+      "properties": {
+        "vendor": {
+          "type": "string",
+          "enum": ["anthropic", "openai", "google"]
+        },
+        "default_model_id": { "type": "string", "minLength": 1 },
+        "overrides": {
+          "type": "object",
+          "patternProperties": {
+            "^[a-z-]+$": { "type": "string" }
+          }
+        }
+      }
+    },
+    "reviewers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["name", "status", "model_id", "duration_seconds", "findings_count", "cost_usd"],
+        "properties": {
+          "name": {
+            "type": "string",
+            "pattern": "^[a-z-]+$"
+          },
+          "status": {
+            "type": "string",
+            "enum": ["completed", "failed", "partial"]
+          },
+          "model_id": { "type": "string", "minLength": 1 },
+          "tokens": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "type": "object",
+                "required": ["input", "output", "cache_creation", "cache_read"],
+                "properties": {
+                  "input": { "type": "integer", "minimum": 0 },
+                  "output": { "type": "integer", "minimum": 0 },
+                  "cache_creation": { "type": "integer", "minimum": 0 },
+                  "cache_read": { "type": "integer", "minimum": 0 }
+                }
+              }
+            ]
+          },
+          "duration_seconds": { "type": "number", "minimum": 0 },
+          "findings_count": { "type": "integer", "minimum": 0 },
+          "cost_usd": { "type": "number", "minimum": 0 },
+          "error": { "type": "string" }
+        },
+        "allOf": [
+          {
+            "if": {
+              "properties": { "status": { "const": "completed" } }
+            },
+            "then": {
+              "required": ["tokens"],
+              "properties": {
+                "tokens": { "type": "object" }
+              }
+            }
+          },
+          {
+            "if": {
+              "properties": { "status": { "enum": ["failed", "partial"] } }
+            },
+            "then": {
+              "required": ["error"]
+            }
+          }
+        ]
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["reviewers_completed", "reviewers_total", "total_findings", "findings_by_severity", "verdict", "total_cost_usd", "total_duration_seconds"],
+      "properties": {
+        "reviewers_completed": { "type": "integer", "minimum": 0 },
+        "reviewers_total": { "type": "integer", "minimum": 1 },
+        "total_findings": { "type": "integer", "minimum": 0 },
+        "findings_by_severity": {
+          "type": "object",
+          "required": ["Critical", "Important", "Minor"],
+          "properties": {
+            "Critical": { "type": "integer", "minimum": 0 },
+            "Important": { "type": "integer", "minimum": 0 },
+            "Minor": { "type": "integer", "minimum": 0 }
+          }
+        },
+        "verdict": {
+          "type": "string",
+          "enum": ["proceed", "revise", "escalate"]
+        },
+        "total_cost_usd": { "type": "number", "minimum": 0 },
+        "total_duration_seconds": { "type": "number", "minimum": 0 }
+      }
+    },
+    "parameters": {
+      "type": "object",
+      "required": ["timeout_per_reviewer_seconds", "minimum_reviewers_threshold", "pattern_extraction_threshold"],
+      "properties": {
+        "timeout_per_reviewer_seconds": { "type": "integer", "minimum": 1 },
+        "minimum_reviewers_threshold": { "type": "integer", "minimum": 1 },
+        "pattern_extraction_threshold": { "type": "integer", "minimum": 1 }
+      }
+    }
+  }
+}
