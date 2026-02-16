@@ -51,6 +51,11 @@ This skill addresses five validated pain points from real design sessions (see `
 **FR1.2:** Each reviewer has distinct critical lens with non-overlapping blind spots
 - **Rationale:** Multi-perspective review catches gaps that single-perspective misses (parallax principle)
 - **Source:** design-orchestrator.md (persona engineering), design v3 (persona activation matrix)
+- **Acceptance Criteria:**
+  - Diversity: <30% of findings are flagged by >3 reviewers (shows distinct perspectives)
+  - Coverage: Union of all reviewer findings covers >70% of planted issues in test cases (shows completeness)
+  - Blind spot quality: Each reviewer's blind spot check identifies ≥1 gap in their own perspective
+  - Measured via eval framework with ground-truth test cases containing known design flaws
 
 **FR1.3:** Reviewers operate independently without cross-contamination
 - **Rationale:** Avoid groupthink, preserve diversity of perspectives
@@ -71,6 +76,10 @@ This skill addresses five validated pain points from real design sessions (see `
 **FR2.2:** Deduplicate identical/similar findings, noting reviewer consensus
 - **Rationale:** 5 reviewers flagging same issue = high-confidence signal
 - **Source:** design v3 (synthesis responsibilities), v3 review (18 multi-reviewer findings)
+- **Acceptance Criteria:**
+  - Summary contains no duplicate findings (human evaluator confirms no redundancy)
+  - When ≥3 reviewers flag semantically equivalent finding, summary notes consensus count
+  - Eval framework tests with planted duplicates: >80% deduplication rate, <10% false merges
 
 **FR2.3:** Classify findings by severity (Critical | Important | Minor)
 - **Rationale:** Prioritize user attention, determine verdict
@@ -93,6 +102,9 @@ This skill addresses five validated pain points from real design sessions (see `
 - **Source:** design v3 (finding phase classification), v3 review summary
 - **Denominator:** Findings with `contributing_phase` set (not all findings). Systemic issues are upstream root causes, not immediate symptoms — only findings with a contributing phase signal upstream problems.
 - **MVP scope:** Exact phase label matching. Semantic root cause clustering deferred (see D13)
+- **Acceptance Criteria:**
+  - Eval framework tests with planted systemic issues (multiple findings tracing to same upstream phase)
+  - System correctly flags systemic when threshold exceeded, identifies the problematic upstream phase
 
 **FR2.8:** Surface contradictions when reviewers disagree
 - **Rationale:** Present both positions, user resolves tension
@@ -109,6 +121,11 @@ This skill addresses five validated pain points from real design sessions (see `
 **FR3.2:** Any Critical finding → `revise` (or `escalate` if survey/calibrate gap)
 - **Rationale:** Critical findings block progress until addressed
 - **Source:** design v3 (verdict logic)
+- **Acceptance Criteria:**
+  - Review with ≥1 Critical finding (design/plan phase) → verdict = revise
+  - Review with ≥1 Critical finding (survey/calibrate phase) → verdict = escalate
+  - Review with 0 Critical findings → verdict follows FR3.5 logic (proceed if only Important/Minor)
+  - Eval framework tests verdict logic with test cases covering all severity/phase combinations
 
 **FR3.3:** Survey or calibrate gap at any severity → `escalate`
 - **Rationale:** Design can't be fixed without fixing upstream requirements/research
@@ -288,9 +305,13 @@ This skill addresses five validated pain points from real design sessions (see `
 
 ### NFR1: Performance
 
-**NFR1.1:** Review completes within 5 minutes for 6 reviewers in parallel
+**NFR1.1:** Review completes as quickly as possible (optimize for speed without sacrificing quality)
 - **Rationale:** Rapid iteration workflow, minimize user wait time
-- **Design assumption:** Inferred from parallel dispatch + 60-120s timeout. Validate empirically.
+- **Design assumption:** Parallel dispatch + 60-120s reviewer timeout suggests ~2-5 min total. Validate empirically.
+- **Acceptance Criteria:**
+  - Eval framework tracks P95 latency over time (no hard gate — complexity varies by design)
+  - Performance regression testing alerts on >20% increase
+  - Developer target: ≤5 minutes for typical design doc with 6 reviewers (happy path)
 
 **NFR1.2:** Synthesizer processes 100+ findings without timeout
 - **Rationale:** v3 review produced 83 findings, expect larger designs to exceed 100
