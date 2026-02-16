@@ -15,6 +15,8 @@ Orchestrate a multi-perspective adversarial review of design artifacts. Dispatch
 - When checking whether a design satisfies its requirements
 - At any pipeline gate: requirements -> design -> plan
 
+**Scope:** This skill covers design-stage adversarial review (phase 1 of the parallax orchestrator). Requirements-stage and plan-stage review are planned but not yet implemented.
+
 ## Review Stages
 
 | Stage | Active Reviewers | Escalation Target |
@@ -33,7 +35,8 @@ Collect from the user:
 - **Design artifact path** — the markdown document to review
 - **Requirements artifact path** — the requirements/PRD to review against
 - **Review stage** — `requirements`, `design`, or `plan` (default: `design`)
-- **Topic label** — name for the review folder (e.g., "auth-system", "parallax-review")
+- **Topic label** — name for the review folder (e.g., "auth-system", "parallax-review"). Validate: alphanumeric, hyphens, underscores only. Reject invalid characters. Use timestamped subfolder for collision handling.
+- **Prior review summary path** (optional) — if re-reviewing, provide the previous summary for cross-iteration tracking
 
 Verify both files exist and are readable before proceeding.
 
@@ -52,9 +55,11 @@ Dispatch all reviewers in a single message with multiple Task tool calls.
 
 Each agent writes its output to `docs/reviews/<topic>/<agent-name>.md`.
 
+As reviewers complete, report progress: "Assumption Hunter: done [1/6]"
+
 ### Step 4: Run Synthesizer
 
-After all reviewers complete, dispatch the review-synthesizer agent. It reads all individual review files and produces `docs/reviews/<topic>/summary.md`.
+After all reviewers complete, dispatch the review-synthesizer agent. It reads all individual review files and produces `docs/reviews/<topic>/summary.md`. If a prior review summary was provided, pass it to the synthesizer for cross-iteration comparison.
 
 ### Step 5: Present Summary
 
@@ -76,9 +81,7 @@ Present each finding one at a time. For each finding, the user can:
 
 **Accept** — Finding is valid. Mark as "accepted" in summary.md. Note any action items.
 
-**Reject** — Finding is wrong or not applicable. Mark as "rejected" in summary.md. Ask for a brief reason (this is tuning feedback for the reviewer).
-
-**Discuss** — User wants to explore this finding. Have a full conversation about it — answer questions, provide context, challenge or defend the finding. When the discussion reaches a conclusion, ask for accept or reject. Then resume the finding queue.
+**Reject** — Finding is wrong or not applicable. Mark as "rejected" in summary.md. Include a rejection note explaining why — this becomes calibration input for the next review cycle.
 
 After each decision, update the finding's Status field in `docs/reviews/<topic>/summary.md`.
 
@@ -86,7 +89,10 @@ After each decision, update the finding's Status field in `docs/reviews/<topic>/
 
 After all selected findings are processed:
 - Update summary.md with final dispositions
-- Commit all review artifacts to git
+- Two commits per review cycle:
+  1. Review artifacts commit: all reviewer outputs + summary
+  2. Auto-fix commit (if any): changes applied from auto-fixable findings
+  User confirms before each commit.
 - Report the outcome:
   - If `escalate`: name the upstream phase to revisit and the specific findings driving that
   - If `revise`: list accepted findings that need design changes
@@ -105,10 +111,21 @@ docs/reviews/<topic>/
 └── prior-art-scout.md      — full review
 ```
 
+## Reviewer Tool Access
+
+| Agent | Tools |
+|---|---|
+| assumption-hunter | Read, Grep, Glob |
+| edge-case-prober | Read, Grep, Glob |
+| requirement-auditor | Read, Grep, Glob |
+| feasibility-skeptic | Read, Grep, Glob |
+| first-principles | Read, Grep, Glob |
+| prior-art-scout | Read, Grep, Glob, WebSearch |
+
 ## Key Principles
 
 - **Adversarial, not hostile** — reviewers probe for weaknesses constructively
 - **Phase-aware** — findings classify which pipeline stage failed, not just what's wrong
 - **Human decides** — the review informs, the user decides what to act on
 - **Persistent artifacts** — everything saved to markdown, tracked by git
-- **Discuss is first-class** — exploring a finding is encouraged, not a delay
+- **Async-first** — review always writes artifacts to disk first. Interactive finding processing is a convenience layer that reads from those artifacts. A review can be run, artifacts committed, and findings processed in a later session.
