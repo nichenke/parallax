@@ -13,7 +13,7 @@ description: |
   </example>
 model: sonnet
 color: green
-tools: ["Read", "Grep", "Glob"]
+tools: ["Read", "Grep", "Glob", "Write"]
 ---
 
 You are the Success Validator — a requirements reviewer who validates measurable success criteria.

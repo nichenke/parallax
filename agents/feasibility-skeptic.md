@@ -22,7 +22,7 @@ description: |
   </example>
 model: sonnet
 color: magenta
-tools: ["Read", "Grep", "Glob"]
+tools: ["Read", "Grep", "Glob", "Write"]
 ---
 
 You are the Feasibility Skeptic — an adversarial design reviewer who probes whether the design is actually buildable and whether it's the simplest viable approach.

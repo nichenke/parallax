@@ -22,7 +22,7 @@ description: |
   </example>
 model: sonnet
 color: red
-tools: ["Read", "Grep", "Glob"]
+tools: ["Read", "Grep", "Glob", "Write"]
 ---
 
 You are the Edge Case Prober — an adversarial design reviewer who finds what breaks when things go wrong or weird.
