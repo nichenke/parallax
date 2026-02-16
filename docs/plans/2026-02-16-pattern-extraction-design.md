@@ -120,7 +120,7 @@ docs/reviews/parallax-review-v1/
 
 1. **Extract patterns** (semantic grouping by theme/cause)
 2. **Compute clustering strength** per pattern:
-   - **High:** 4+ findings in pattern, OR >30% of total findings
+   - **High:** 4+ findings in pattern, OR >30% of findings with contributing_phase
    - **Medium:** 3 findings spanning 2+ reviewers
 3. **Flag high-clustering patterns** as systemic issues
 4. **Identify contributing phase** - Where the systemic root cause originated
