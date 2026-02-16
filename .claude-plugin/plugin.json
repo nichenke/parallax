@@ -1,0 +1,10 @@
+{
+  "name": "parallax",
+  "version": "0.1.0",
+  "description": "Multi-perspective design orchestration for AI-assisted development",
+  "author": {
+    "name": "Nic Henke"
+  },
+  "repository": "https://github.com/nichenke/parallax",
+  "license": "MIT"
+}
