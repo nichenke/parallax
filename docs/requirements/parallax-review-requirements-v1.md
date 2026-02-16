@@ -97,14 +97,14 @@ This skill addresses five validated pain points from real design sessions (see `
 - **Rationale:** "Design flaw (primary) caused by calibrate gap (contributing)" enables immediate fix + systemic correction
 - **Source:** design v3 (finding phase classification), v3 review (11 findings with contributing phase)
 
-**FR2.7:** Flag systemic issues when >30% of findings with a contributing phase share the same contributing phase
-- **Rationale:** Detect upstream root causes requiring escalation
-- **Source:** design v3 (finding phase classification), v3 review summary
-- **Denominator:** Findings with `contributing_phase` set (not all findings). Systemic issues are upstream root causes, not immediate symptoms — only findings with a contributing phase signal upstream problems.
-- **MVP scope:** Exact phase label matching. Semantic root cause clustering deferred (see D13)
+**FR2.7:** Flag systemic issues when pattern clustering exceeds threshold (4+ findings OR >30% of total findings)
+- **Rationale:** Detect high-impact patterns requiring escalation. Systemic issues are identified by clustering strength (multiple findings sharing root cause/theme), not by phase attribution. `contributing_phase` is used for routing (where to fix), not detection.
+- **Source:** design v3 (finding phase classification), pattern extraction design (FR10)
+- **Denominator:** Total findings (not just findings with contributing_phase). Absolute clustering strength indicates systemic severity regardless of phase attribution.
+- **MVP scope:** Pattern-based semantic clustering. `contributing_phase` identifies where systemic root cause originated (for routing/escalation).
 - **Acceptance Criteria:**
-  - Eval framework tests with planted systemic issues (multiple findings tracing to same upstream phase)
-  - System correctly flags systemic when threshold exceeded, identifies the problematic upstream phase
+  - Eval framework tests with planted systemic issues (multiple findings clustering around same theme/cause)
+  - System correctly flags systemic when clustering threshold exceeded, identifies contributing phase for routing
 
 **FR2.8:** Surface contradictions when reviewers disagree
 - **Rationale:** Present both positions, user resolves tension
