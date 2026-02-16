@@ -18,6 +18,13 @@ The name comes from parallax — the apparent shift in an object's position when
 - **YAGNI ruthlessly:** Don't over-engineer. Build what's needed now, defer what isn't.
 - **SRE-influenced:** Premortem thinking, error budgets, blast radius scoping.
 
+## Branch Discipline
+
+**Never commit directly to `main`.** Always use feature branches + pull requests.
+
+- A pre-commit hook enforces this (see `hooks/pre-commit`)
+- New clones: Run `git config core.hooksPath hooks` to enable the hook
+
 ## Subagent Tool Discipline
 
 Subagents inherit these rules. **Use dedicated tools, not bash equivalents:**

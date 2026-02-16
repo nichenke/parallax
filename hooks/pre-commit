@@ -1,0 +1,18 @@
+#!/bin/sh
+#
+# Pre-commit hook: Prevent direct commits to main branch
+#
+
+# Get current branch name
+branch=$(git symbolic-ref --short HEAD 2>/dev/null)
+
+# Block commits to main (no override)
+if [ "$branch" = "main" ]; then
+    echo "ERROR: Direct commits to main branch are not allowed."
+    echo ""
+    echo "Please create a feature branch:"
+    echo "  git checkout -b feat/your-feature-name"
+    exit 1
+fi
+
+exit 0
