@@ -472,3 +472,43 @@ Five Critical findings are calibrate gaps (problem framing, requirements review 
 14. **Document single-user limitation** — Requirement Auditor Finding 14. Multi-user workflows deferred. For team review, use external tooling (LangSmith, GitHub PR comments).
 
 15. **Orphaned finding management for Critical-first mode** — Requirement Auditor Finding 11, First Principles Finding 13. Mark deferred findings, reconcile on re-review, prompt user to process accumulated findings after revise loop converges.
+
+---
+
+## V3 Finding Dispositions
+
+**Date:** 2026-02-16
+**Disposition strategy:** Batch disposition. All 22 Critical findings acknowledged; none block implementation. Findings are spec gaps for unbuilt features, strategic questions best answered by building, or edge cases not yet encountered empirically. Project philosophy: prototype-first, YAGNI ruthlessly, build to understand.
+
+### Batch Disposition: All 22 Critical Findings
+
+**Status:** acknowledged — defer to implementation
+
+**Reasoning:** V3 confirmed documentation debt from v2 is resolved (M4). The remaining Critical findings fall into three categories, none of which require design-level resolution before building:
+
+1. **Spec gaps for unbuilt features (C1-C7, C18-C22):** JSONL schema, finding IDs, auto-fix workflow, prompt caching, systemic detection taxonomy. These are implementation decisions — define the schema when building JSONL output, not in the design doc beforehand. Specifying prematurely risks designing the wrong thing.
+
+2. **Strategic/philosophical challenges (C10-C17):** Problem framing inversion, requirements-first vs design-first, adversarial naming mismatch, build-vs-leverage, design-after-implementation, phase classification routing, requirements versioning. All were deferred to empirical eval in v2 dispositions. V3 re-raised them correctly, but the disposition strategy is unchanged: validate through building, not through more design review.
+
+3. **Edge cases in existing design (C8-C9):** Partial reviewer completion corrupting systemic detection, severity range false escalations. Three review cycles completed without hitting these as actual problems. Address when encountered.
+
+**Notable consensus signals acknowledged:**
+- C1 (JSONL schema): 4-reviewer consensus across v2+v3. Highest-priority implementation item when building structured output.
+- C2 (Finding IDs): 3-reviewer consensus. Hybrid approach (hash fast-path + LLM matching) is the likely implementation, but schema depends on JSONL decisions.
+- C3 (Auto-fix safety): 3-reviewer consensus. Will implement with user approval gate when building auto-fix. Not building auto-fix in near term.
+
+### Important and Minor Findings (47I / 14M)
+
+**Status:** acknowledged — defer to implementation
+
+Same reasoning applies. Important findings are deeper elaborations of the Critical categories (assumption violations, synthesizer complexity, edge case handling, framework leverage opportunities). Minor findings are process improvements and documentation items. All will be addressed as their respective features are built.
+
+### Review Cycle Assessment
+
+Three full review cycles complete (v1: 44 findings, v2: 55, v3: 83). The review skill is working — it surfaces real concerns, deduplicates across reviewers, tracks cross-iteration progress. Key validation:
+
+- **V2 systemic issue (documentation debt) confirmed resolved in v3.** The review process correctly detected improvement.
+- **V3 findings shifted from "decided but not documented" to "documented but not specified."** This is expected — syncing decisions to the design doc without adding implementation specs is exactly what happened.
+- **Calibrate gaps are stable across iterations.** Same strategic questions re-raised with consistent reasoning. The review process correctly flags them but disposition strategy (defer to empirical eval) is unchanged.
+
+**Next action:** Stop reviewing, start building. The review skill has been validated through 3 cycles of self-review. External validation (Second Brain test case) and implementation of the highest-consensus items (JSONL, finding IDs) are higher-value next steps than another review iteration.
