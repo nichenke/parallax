@@ -1,6 +1,7 @@
 # Design: parallax:review — Adversarial Multi-Agent Design Review
 
-**Date:** 2026-02-15
+**Date:** 2026-02-16
+**Version:** v4 (synced with requirements v1.2)
 **Status:** Approved
 **Approach:** Parallel Persona Agents with Synthesizer
 
@@ -158,7 +159,9 @@ A **Synthesizer agent** consolidates reviewer output. Its role requires judgment
 | **Design flaw** | Assumption violated, edge case missed, wrong approach | Revise the design |
 | **Plan concern** | Implementation issue (flagged for plan review stage) | Carry forward |
 
-Findings are classified by **primary phase** (the most actionable fix) and optional **contributing phase** (upstream cause). Example: 'Design flaw (primary) caused by calibrate gap (contributing).' This enables two actions: immediate fix and systemic upstream correction. When >30% of findings share a contributing phase, the synthesizer flags a systemic issue.
+Findings are classified by **primary phase** (the most actionable fix) and optional **contributing phase** (upstream cause). Example: 'Design flaw (primary) caused by calibrate gap (contributing).' This enables two actions: immediate fix and systemic upstream correction.
+
+**Systemic issue detection:** When >30% of findings with a contributing phase share the same contributing phase, the synthesizer flags a systemic issue. The denominator is findings with `contributing_phase` set (not all findings) because systemic issues indicate upstream root causes, not immediate symptoms. MVP scope uses exact phase label matching; semantic root cause clustering is deferred to post-MVP.
 
 ### Verdict Logic
 
@@ -220,11 +223,12 @@ Reviewer dispatch expects partial failures as normal operation (API rate limits,
 - **Partial results:** Proceed if minimum threshold met (4/6 agents succeed)
 - **Transparency:** Mark summary as partial if <100% reviewers completed ("5/6 reviewers completed, Feasibility Skeptic timed out")
 - **Selective re-run:** Allow re-running individual failed reviewers without redoing successful ones
-- **Schema validation:** Validate reviewer output format before synthesis; malformed output triggers retry, then fail-fast
+- **Schema validation:** Validate reviewer output format before synthesis; malformed output triggers retry, then fail-fast. (Blocked on JSONL schema definition)
+- **Clean up:** Remove partial/corrupted output files before re-running failed reviewers to avoid stale data contamination
 
 ## Reviewer Prompt Architecture
 
-Reviewer prompts are structured for future prompt caching (90% input cost reduction on cache hits). Optimization deferred until prompts stabilize post-prototype, but the structure is designed now.
+Reviewer prompts use a three-part structure optimized for prompt caching (90% input cost reduction on cache hits) while enabling quality iteration without cache invalidation.
 
 **Stable prefix** (cacheable):
 - Persona identity and adversarial mandate
@@ -232,23 +236,31 @@ Reviewer prompts are structured for future prompt caching (90% input cost reduct
 - Output format rules and constraints
 - Voice guidelines (see Per-Reviewer Output Format)
 
-**Variable suffix** (per-review):
-- Design artifact being reviewed
-- Requirements context
-- Iteration number and prior review summary (if re-review)
-- Changed sections (git diff, if available)
+**Calibration rules** (not cached, versioned separately):
+- False positive/negative corrections based on prior review feedback
+- Edge case handling refinements
+- Severity calibration adjustments
+- Enables iterative prompt quality improvement without losing cache benefits
 
-Prompt changes to the stable prefix invalidate cache and should be tracked as versioned changes.
+**Variable suffix** (per-review):
+- File paths to design and requirements documents (reviewers use Read tool to access content, NOT inline in prompt)
+- Changed sections (git diff, when available: git repo exists AND design doc has prior committed version)
+- Iteration number
+
+Two version numbers tracked: stable prefix version (rarely changes, invalidates cache) and calibration rules version (frequently changes, does not invalidate cache).
+
+**Document access:** Reviewers read design/requirements documents via Read tool (supports multi-file designs, non-git docs). MVP scope: local files and public URLs only. Authenticated sources (Confluence, Google Docs, Notion) deferred to MCP integration.
 
 ## Cross-Iteration Finding Tracking
 
-Findings persist across review iterations with stable identifiers and status tracking.
+Findings are tracked across iterations using a two-pass post-synthesis approach: pattern extraction followed by delta detection.
 
-- **Finding IDs:** Stable hash derived from section + issue content. Enables cross-iteration diff.
-- **Status field:** `open` | `addressed` | `rejected` (tracked in summary)
-- **Prior context:** On re-review, previous summary.md is included in reviewer context. Reviewers explicitly note "previously flagged, now resolved" vs "new finding" vs "still an issue."
-- **Cross-iteration diff:** Summary includes section showing which prior findings are now resolved, which persist, and which are new.
-- **Changed section focus:** When git diff is available, reviewers receive it to focus extra scrutiny on newly-changed sections.
+- **Finding IDs:** Per-iteration IDs with format `v{iteration}-{reviewer}-{sequence}` (e.g., `v3-assumption-hunter-001`). Simple, unique per run, no cross-run stability required.
+- **Clean reviews:** Reviewers do NOT receive prior review context (avoids anchoring bias, preserves perspective diversity).
+- **Pattern extraction:** After synthesis, extract semantic patterns from findings (group related issues into actionable themes). Cap: 15 patterns per review. Runs in critical path after synthesis, before finding processing. Output: `docs/reviews/<topic>/patterns-v{N}.json`
+- **Delta detection:** When prior review exists, compare patterns across runs using LLM-based semantic matching (handles equivalence without exact text matching). Identify resolved/persisting/new patterns. Runs in critical path after pattern extraction. Output: `docs/reviews/<topic>/delta-v{N-1}-v{N}.json`
+- **Finding processing threshold:** Reviews with ≤50 findings proceed to interactive finding processing with pattern context. Reviews with >50 findings write pattern artifacts to disk but skip interactive processing (summary notes finding count, user processes async).
+- **Changed section focus:** When git diff is available (git repo exists AND design doc has prior committed version), reviewers receive it to focus extra scrutiny on newly-changed sections. First-time reviews have no diff highlighting.
 
 ## Reviewer Capabilities
 
