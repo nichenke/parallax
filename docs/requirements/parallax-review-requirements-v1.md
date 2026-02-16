@@ -596,8 +596,8 @@ Summary of decisions:
 
 1. ✅ **Open questions resolved** (Q1-Q8) → ADR-001
 2. ✅ **Requirements review** — Format/style, JTBD gap analysis, necessity assessment
-3. **Define acceptance criteria** — Add explicit testability criteria to critical requirements (FR1.2, FR2.2, FR2.7, FR3.2, NFR1.1, 5-10 total)
-4. **Update design doc** — Sync design v4 with finalized requirements
+3. ✅ **Define acceptance criteria** — Added to 5 critical requirements (FR1.2, FR2.2, FR2.7, FR3.2, NFR1.1)
+4. ✅ **Update design doc** — Synced design v4 with finalized requirements
 5. **JSONL schema implementation** — Define exact structure per FR6.1 (blocks FR7.5)
 6. **Pattern extraction prototype** — Test FR10 workflow with existing v3 review data
 7. **Token efficiency validation** — Measure savings from clean reviews (FR1.3) + tool-based document access (FR8.3)
