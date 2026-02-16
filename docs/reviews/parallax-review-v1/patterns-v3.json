@@ -1,0 +1,167 @@
+{
+  "schema_version": "1.0.0",
+  "type": "pattern_extraction",
+  "metadata": {
+    "review_run_id": "parallax-review-v1",
+    "iteration": 3,
+    "extraction_date": "2026-02-16T18:22:25Z",
+    "total_findings": 17,
+    "patterns_extracted": 8,
+    "extraction_model": "claude-sonnet-4-5-20250929"
+  },
+  "patterns": [
+    {
+      "pattern_id": "p1",
+      "title": "Architectural Specification Gaps",
+      "finding_ids": [
+        "v3-requirement-auditor-002",
+        "v3-assumption-hunter-001",
+        "v3-assumption-hunter-003",
+        "v3-feasibility-skeptic-003",
+        "v3-prior-art-scout-001"
+      ],
+      "finding_count": 5,
+      "severity_range": ["Critical", "Important"],
+      "affected_phases": {
+        "primary": ["design", "calibrate"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "Multiple design decisions documented as accepted but lack implementation specifications. JSONL schema referenced throughout but never defined (4 reviewers flagged). Auto-fix workflow added to design but classification criteria, validation mechanisms, and git safety protocols unspecified. Finding ID mechanism mentioned but hash generation algorithm undefined. Prompt caching architecture added but cache boundary, versioning, and invalidation strategy incomplete. Treating specifications as documentation debt incorrectly scopes implementation work.",
+      "actionable_next_step": "Define schemas and specifications for all referenced-but-unspecified mechanisms: (1) JSONL schema with required/optional fields and enums, (2) Auto-fix classification criteria with conservative examples and validation workflow, (3) Finding ID generation algorithm with semantic matching fallback for hash brittleness, (4) Prompt caching architecture with explicit cache boundary delimiter and versioning strategy.",
+      "reviewers": ["requirement-auditor", "assumption-hunter", "feasibility-skeptic", "prior-art-scout"]
+    },
+    {
+      "pattern_id": "p2",
+      "title": "Assumption Violations",
+      "finding_ids": [
+        "v3-assumption-hunter-002",
+        "v3-assumption-hunter-005"
+      ],
+      "finding_count": 2,
+      "severity_range": ["Critical", "Important"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "Design makes unstated assumptions about environment that break in real-world usage. Git-based iteration tracking assumes design docs live in git repositories, excluding teams using Confluence, Notion, or Google Docs. File-system-based state management assumes single-user, single-machine workflows, breaking distributed collaboration scenarios. Both assumptions align with prototype usage but conflict with requirements stating tool should be applicable to work contexts.",
+      "actionable_next_step": "Either (1) Document single-user, git-only constraints explicitly as MVP limitations, or (2) Add input validation for git-tracked docs with fallback to text-based diff, and (3) Add conflict detection for file-based state (check for uncommitted changes before processing) or evaluate external state management solutions like LangSmith.",
+      "reviewers": ["assumption-hunter"]
+    },
+    {
+      "pattern_id": "p3",
+      "title": "Edge Case Failures",
+      "finding_ids": [
+        "v3-edge-case-prober-001",
+        "v3-edge-case-prober-002",
+        "v3-edge-case-prober-003",
+        "v3-edge-case-prober-004"
+      ],
+      "finding_count": 4,
+      "severity_range": ["Critical"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": null
+      },
+      "summary": "Multiple failure modes where design mechanisms break under realistic stress conditions. Hash-based finding IDs become orphaned when sections are renamed or restructured, producing false positives and false negatives in cross-iteration tracking. Auto-fix re-review workflow lacks loop termination conditions, enabling infinite iteration that burns budget. Partial reviewer completion (4/6 threshold) skews systemic detection percentages when missing reviewers would have flagged different phase patterns. Conservative severity resolution (use highest) allows single pessimistic reviewer to trigger false escalations.",
+      "actionable_next_step": "Add robustness mechanisms: (1) Replace text hashing with LLM-based semantic matching for finding persistence, (2) Add auto-fix loop guards with maximum iteration limits and budget thresholds, (3) Disable systemic detection when reviewers fail or mark results as provisional, (4) Use majority-vote severity resolution instead of maximum, flagging disputed findings for user review.",
+      "reviewers": ["edge-case-prober"]
+    },
+    {
+      "pattern_id": "p4",
+      "title": "External API Coordination Gaps",
+      "finding_ids": [
+        "v3-feasibility-skeptic-008"
+      ],
+      "finding_count": 1,
+      "severity_range": ["Important"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": null
+      },
+      "summary": "Multiple reviewers querying same external resources (GitHub API, curl) wastes quota and creates rate-limit risks. GitHub API has 60/hour unauthenticated limit and 5000/hour authenticated limit. If 6 reviewers independently search for same information, that's 6 API calls for identical data. No result caching or coordination mechanism specified. Critical for CI/CD automation where rate limits become blocking failures.",
+      "actionable_next_step": "Add result caching layer for external API calls: (1) If Prior Art Scout searches GitHub for X, cache result in review run state, (2) Other reviewers reference cached results instead of re-querying, (3) Document which tools are quota-limited (gh, curl with external endpoints), (4) Plan coordination strategy for CI/CD where multiple reviews may run in parallel.",
+      "reviewers": ["feasibility-skeptic"]
+    },
+    {
+      "pattern_id": "p5",
+      "title": "Validation & Testing Gaps",
+      "finding_ids": [
+        "v3-feasibility-skeptic-011"
+      ],
+      "finding_count": 1,
+      "severity_range": ["Critical"],
+      "affected_phases": {
+        "primary": ["calibrate"],
+        "contributing": null
+      },
+      "summary": "After 3 review iterations, only self-review (parallax reviewing itself) has been completed. Second Brain test case—real project with 40+ known design flaws documented in original session—has not been run. Self-review validates that tool executes but doesn't validate that it catches real design problems. This is circular validation: reviewers find issues in review design, but that doesn't prove they'd catch issues in external designs. External validation missing before claiming effectiveness.",
+      "actionable_next_step": "Run Second Brain test case immediately as validation: (1) Use known design with documented flaws as ground truth, (2) Run parallax:review on Second Brain design doc, (3) Check if reviewers flag the known 40+ issues from original manual review, (4) Measure false positive rate (flagged issues that weren't problems), (5) Use results to validate approach and calibrate reviewer prompts before further development.",
+      "reviewers": ["feasibility-skeptic"]
+    },
+    {
+      "pattern_id": "p6",
+      "title": "Prior Art Evaluation Deferred",
+      "finding_ids": [
+        "v3-prior-art-scout-002"
+      ],
+      "finding_count": 1,
+      "severity_range": ["Critical"],
+      "affected_phases": {
+        "primary": ["calibrate"],
+        "contributing": ["survey"]
+      },
+      "summary": "Inspect AI, LangGraph, LangSmith, and Braintrust identified as mature solutions solving 60-80% of custom infrastructure needs (parallel agent dispatch, state management, human-in-the-loop gates, finding annotation UI). Design defers evaluation to when limits hit. But limits are unknowable without building first. If parallax builds custom orchestration then discovers existing frameworks handle it, that's wasted effort on infrastructure instead of focusing on novel contribution (persona prompts and phase classification). CLAUDE.md explicitly states BUILD adversarial review (novel), LEVERAGE mature frameworks—design inverts this.",
+      "actionable_next_step": "Time-box prior art evaluation before significant custom development: (1) Spend 2-4 hours testing Inspect AI with sample review task to validate multi-agent orchestration, (2) Test LangGraph for stateful workflow and human-in-the-loop gates, (3) Test LangSmith annotation UI for finding processing, (4) If existing tools handle 80%+ of needs with acceptable integration effort, leverage them—shifts focus to prompt engineering (novel work) instead of infrastructure plumbing (solved problem).",
+      "reviewers": ["prior-art-scout"]
+    },
+    {
+      "pattern_id": "p7",
+      "title": "Model & Cost Strategy Gaps",
+      "finding_ids": [
+        "v3-requirement-auditor-005"
+      ],
+      "finding_count": 1,
+      "severity_range": ["Important"],
+      "affected_phases": {
+        "primary": ["design"],
+        "contributing": ["calibrate"]
+      },
+      "summary": "Requirements doc and CLAUDE.md specify model tiering strategy (Haiku for mechanical tasks, Sonnet for analysis, Opus sparingly for deep review) for cost optimization. NFR2.1 targets <$1 per review at Sonnet pricing. Design specifies all reviewers use Sonnet by default but doesn't assign models per persona. Does Assumption Hunter need Opus-level reasoning? Can Prior Art Scout use Haiku for search? Without explicit model assignment, can't validate budget assumptions or test quality/cost tradeoffs via eval framework.",
+      "actionable_next_step": "Document model assignment per reviewer: (1) Specify model tier per persona with rationale (mechanical reviewers like Prior Art Scout start with Haiku, reasoning-heavy like Assumption Hunter start with Sonnet), (2) Estimate cost impact based on token counts and pricing, (3) Validate against NFR2.1 cost target of <$1 per review, (4) Make model configurable so eval framework can test Haiku vs Sonnet quality tradeoffs empirically.",
+      "reviewers": ["requirement-auditor"]
+    },
+    {
+      "pattern_id": "p8",
+      "title": "Problem Framing Questions",
+      "finding_ids": [
+        "v3-first-principles-002",
+        "v3-first-principles-003"
+      ],
+      "finding_count": 2,
+      "severity_range": ["Critical", "Important"],
+      "affected_phases": {
+        "primary": ["calibrate"],
+        "contributing": ["survey"]
+      },
+      "summary": "Two fundamental questions about whether parallax is solving the right problem in the right way. First, requirements doc explicitly states requirement refinement is the single biggest design quality lever in practice (prevention > detection), but prototype builds design review first and defers requirements review. This inverts priority—building symptom detection before root cause prevention. Second, tool is named adversarial review but implements coverage-based inspection with distinct personas. Adversarial implies debate and opposing positions, but reviewers don't challenge each other—they inspect different surfaces independently. Naming mismatch may cause misaligned user expectations.",
+      "actionable_next_step": "Two options: (1) Reframe prototype explicitly as infrastructure validation (testing orchestration mechanics, not value hypothesis), defer requirements review hypothesis testing to later with full awareness of priority inversion, OR (2) Build requirements-stage review first to validate highest-leverage hypothesis before investing in lower-leverage design review. For naming: either rename to multi-perspective review (accurate) or redesign 2-3 personas as stance-based adversaries requiring reconciliation (test both architectures via eval).",
+      "reviewers": ["first-principles"]
+    }
+  ],
+  "systemic_issues": [
+    {
+      "contributing_phase": "calibrate",
+      "finding_count": 4,
+      "percentage": 23.5,
+      "threshold_exceeded": false,
+      "description": "Four findings trace to calibrate phase as contributing cause (architectural specifications undefined, file system assumptions, model tiering unspecified, spec vs documentation gap). Below 30% threshold but notable cluster suggesting incomplete requirements or deferred decisions that impact design."
+    },
+    {
+      "contributing_phase": "survey",
+      "finding_count": 2,
+      "percentage": 11.8,
+      "threshold_exceeded": false,
+      "description": "Two findings trace to survey phase as contributing cause (problem framing inversion, build vs leverage deferred). Both relate to foundational research questions about whether the right problem is being solved and whether existing solutions should be leveraged before building custom."
+    }
+  ]
+}
