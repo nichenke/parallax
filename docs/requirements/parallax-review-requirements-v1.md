@@ -223,7 +223,8 @@ This skill addresses five validated pain points from real design sessions (see `
 **FR7.5:** Validate reviewer JSONL output before synthesis (schema check, retry on malformed JSON)
 - **Rationale:** Malformed output triggers retry, then fail-fast (prevents synthesizer errors)
 - **Source:** design v3 (parallel agent failure handling), Q4 resolution (reviewers output JSONL)
-- **Dependency:** Blocked on JSONL schema definition (Next Steps #4)
+- **Schema:** `schemas/reviewer-findings-v1.0.0.schema.json`
+- **Validator:** `scripts/validate-schemas.py`
 
 **FR7.6:** Clean up partial/corrupted output files before re-running failed reviewers
 - **Rationale:** Avoid stale data contaminating re-run results
@@ -598,6 +599,11 @@ Summary of decisions:
 2. ✅ **Requirements review** — Format/style, JTBD gap analysis, necessity assessment
 3. ✅ **Define acceptance criteria** — Added to 5 critical requirements (FR1.2, FR2.2, FR2.7, FR3.2, NFR1.1)
 4. ✅ **Update design doc** — Synced design v4 with finalized requirements
-5. **JSONL schema implementation** — Define exact structure per FR6.1 (blocks FR7.5)
+5. ✅ **JSONL schema implementation** — Define exact structure per FR6.1 (blocks FR7.5)
+   - Reviewer output schema (findings JSONL)
+   - Run metadata schema (cost tracking, prompt versions)
+   - Pattern extraction schema (patterns-v{N}.json)
+   - Delta detection schema (delta-v{N-1}-v{N}.json)
+   - **Status:** Complete. Schemas implemented in `schemas/` directory.
 6. **Pattern extraction prototype** — Test FR10 workflow with existing v3 review data
 7. **Token efficiency validation** — Measure savings from clean reviews (FR1.3) + tool-based document access (FR8.3)
