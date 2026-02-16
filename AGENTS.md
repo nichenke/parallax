@@ -55,6 +55,18 @@ Each file in `agents/` contains a reviewer prompt with YAML frontmatter (metadat
 | Prior Art Scout | `agents/prior-art-scout.md` | Existing solutions, prior work |
 | Review Synthesizer | `agents/review-synthesizer.md` | Consolidation, deduplication, verdict |
 
+### Requirements Review Agents
+
+**Used by:** `parallax:requirements --light`
+
+| Agent | Focus | Key Question |
+|-------|-------|--------------|
+| problem-framer | Problem statement validation | "Are we solving the right problem?" |
+| scope-guardian | Scope boundaries and MVP | "What's in/out? Where's the MVP line?" |
+| constraint-finder | Limits and feasibility | "What constraints exist but aren't stated?" |
+| success-validator | Success criteria and acceptance | "How do we know if this succeeded?" |
+| assumption-hunter | Implicit assumptions (reused) | "What has the designer assumed?" |
+
 ### Process
 1. Read both input documents
 2. For each reviewer: apply the agent prompt to the design+requirements, write output to `docs/reviews/<topic>/<agent-name>.md`
