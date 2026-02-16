@@ -1,0 +1,28 @@
+# UX Friction Log
+
+Running observations from building parallax using superpowers skills. Each entry captures a moment where skill discoverability, triggering, or pipeline UX fell short.
+
+These become requirements for parallax's UX design.
+
+## Format
+
+`YYYY-MM-DD | phase/skill | observation`
+
+## Log
+
+2026-02-15 | session-start | User said "let's start working on design" — brainstorming skill triggered correctly, but only because the using-superpowers meta-skill enforces checking. No indication to the user that it was about to trigger or why.
+2026-02-15 | skill-triggering | User reports not always invoking all needed skills, and not knowing the "magic phrases" to trigger them. Discoverability depends entirely on LLM pattern-matching against skill descriptions — no user-facing menu or pipeline visibility.
+2026-02-15 | meta | Needed to create this log convention from scratch. No built-in mechanism for capturing process observations while working.
+2026-02-15 | brainstorming | AskUserQuestion multiple-choice worked well for narrowing decisions. But when the user had something more nuanced to say (stage-specific personas, finding processing workflow), the rigid format got in the way — they had to reject the question and explain in free text.
+2026-02-15 | brainstorming | No visibility into "where am I in the brainstorming process?" — user has to trust the skill is following its checklist. Pipeline position is invisible.
+2026-02-15 | smoke-test | Opus consumed significant tokens orchestrating the smoke test — mechanical tasks (extracting agent outputs from JSONL, writing files, dispatching synthesizer) should be delegated to Sonnet subagents. Opus needed only for quality-sensitive decisions (finding processing, prompt iteration). Be intentional about model tier for each step.
+2026-02-15 | smoke-test | Context compaction hit during smoke test orchestration. The 6 agent outputs are large (66 findings total across reviewers). Compaction lost prior conversation state. For production implementation: (a) use subagents for orchestration steps, (b) don't load full agent outputs into main context, (c) let synthesizer subagent handle consolidation independently.
+2026-02-15 | smoke-test | Reviewer output should use structured JSONL as canonical format, not markdown. Benefits: mechanical schema validation (missing fields caught without LLM), CLI tools for filtering/sorting/counting, synthesizer reads structured data instead of parsing markdown. Markdown rendering as presentation layer on top. This is a design improvement for Task 8.
+2026-02-15 | smoke-test | Synthesizer escalated Finding 8 from Important to Critical — violating its own "purely editorial" constraint. Validates the finding about the synthesizer role. The synthesizer role definition is dishonest about what the job requires.
+2026-02-15 | smoke-test | CLI tools as mechanical helpers: jq for JSONL manipulation, schema validation, finding counting, severity filtering — keeps LLM tokens for understanding-dependent tasks only. "Does this finding have all required fields?" is a jq query, not an LLM call.
+2026-02-15 | smoke-test/finding-processing | Finding presentation must include full context for decision-making. First attempt showed only title + one-line summary — user couldn't make a disposition decision. Fixed: present Issue, Why it matters, Suggestion inline. Rule: either point user to a doc or present everything inline. Never show a title and ask for a decision.
+2026-02-15 | smoke-test/finding-processing | User disposition notes are high-value design input. "always mark partial" and "async is default, interactive reuses artifacts" — these are design decisions captured at the point of review. The accept/reject flow with free-text notes is working well as a decision-capture mechanism.
+2026-02-15 | smoke-test/finding-processing | Loading full summary.md to resume finding processing consumed ~10% of context window. For 41 findings across 500+ lines, this is unsustainable — context is the scarcest resource. Finding processing needs a format where you can load individual findings on demand (JSONL lines, or separate files per finding) rather than slurping the whole summary. Reinforces JSONL-as-canonical-format decision.
+2026-02-15 | smoke-test/finding-processing | Follow-up: if findings were JSONL, resuming at Finding 4 would be `jq 'select(.id == 4)' findings.jsonl` — one finding loaded, zero wasted context. Markdown summary becomes a rendered view (`jq | render`), not the source of truth. CLI tools for mechanical retrieval, LLM tokens only for understanding and decision-making.
+2026-02-15 | v2-review/folder-strategy | Re-review overwrites same folder (git tracks diff). User noted: should be new folder per iteration if cross-iteration tracking needs both visible simultaneously. Overwrite+git works but requires checkout gymnastics to see both. New folder per iteration (e.g., `parallax-review-v1/`, `parallax-review-v2/`) lets synthesizer read both naturally, avoids data loss risk. Decision: new folders per iteration, not overwrite.
+2026-02-15 | v2-review/synthesizer-speed | Synthesizer was noticeably slow in both v1 and v2 runs. Reads 6 reviewer outputs (each 3-18K) + prior summary (70K) — total input is large. Possible causes: (a) sheer input volume (~150K tokens across files), (b) deduplication requires N×N comparison across all findings, (c) Sonnet model may bottleneck on this consolidation task. Investigate during eval phase — potential optimizations include structured JSONL input (mechanical dedup before LLM), splitting into merge-then-verdict steps, or model tiering (Opus for judgment, Haiku for aggregation).
