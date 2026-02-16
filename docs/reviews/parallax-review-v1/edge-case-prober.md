@@ -1,137 +1,195 @@
 # Edge Case Prober Review
 
+## Changes from Prior Review
+
+### Previously Flagged, Now Resolved
+- **Finding 1 (Parallel agent failure handling):** RESOLVED. Now explicitly addressed in reviewer agent prompts with timeout handling, retry logic, and partial failure mode. Individual reviewer files include error handling specifications.
+- **Finding 2 (Progress indication):** RESOLVED. Skill now streams completion status as reviewers finish.
+- **Finding 6 (Re-review iteration context):** RESOLVED. Cross-iteration prompting explicitly added—reviewers receive prior summary and must note "new finding" vs "still an issue" vs "previously flagged, now resolved."
+- **Finding 11 (Git commit failures):** PARTIALLY RESOLVED. Artifacts always written to disk first (async-default mode), reducing blast radius of git failures. Explicit git failure handling not documented but degraded mode implicit.
+- **Finding 12 (Topic label collision):** RESOLVED. Topic label sanitization and timestamped folder collision handling added to skill implementation.
+
+### Still an Issue (Design Doc Unchanged)
+The design document at `/Users/nic/src/design-parallax/parallax/.worktrees/parallax-review/docs/plans/2026-02-15-parallax-review-design.md` has NOT been updated since the first review. All findings from the prior review that required design changes remain unaddressed in the design doc itself. The implementation (prompts, skill code) has been updated per Task 8, but the design doc is frozen.
+
+This re-review is evaluating THE SAME DESIGN DOC against updated requirements (cross-iteration context, disposition notes from prior review processing). The findings below focus on:
+1. Edge cases introduced by the disposition notes (new features not in original design)
+2. Inconsistencies between disposition notes and design doc
+3. Implementation gaps surfaced by the first review cycle
+
+---
+
 ## Findings
 
-### Finding 1: No handling for reviewer agent failures
+### Finding 1: Cross-Iteration Finding ID Stability Not Specified
 - **Severity:** Critical
-- **Phase:** design
-- **Section:** Step 2: Dispatch (parallel reviewer execution)
-- **Issue:** The design dispatches 4-6 reviewer agents in parallel but doesn't specify what happens if one or more agents fail (API timeout, rate limit, model error, prompt refusal). A single agent failure could block the entire review or produce incomplete findings.
-- **Why it matters:** In production, partial failures are common (API rate limits, transient network errors, model capacity issues). If one reviewer fails, the user sees "Running 6 reviewers in parallel..." with no result, or worse — gets an incomplete synthesis that silently excludes a critical perspective.
-- **Suggestion:** Define failure handling strategy: (1) Retry failed agents with exponential backoff, (2) Mark failed agents in summary ("5/6 reviewers completed, Feasibility Skeptic timed out"), (3) Allow user to re-run individual failed reviewers without redoing successful ones, (4) Set timeout threshold and surface degraded mode explicitly.
+- **Phase:** design (primary)
+- **Section:** Finding 5 disposition (cross-iteration tracking), Synthesis
+- **Issue:** Disposition note for prior Finding 5 specifies "stable finding IDs, status tracking across iterations, prior summary fed to reviewers on re-review." The mechanism for generating stable IDs is unspecified in the design. If finding IDs are based on hash of section + issue text, minor wording changes between iterations break tracking (e.g., reviewer rephrases same issue, hash changes, system treats as new finding). If IDs are reviewer-assigned, reviewers may not maintain consistency. If auto-incremented per topic, findings from different iterations can't be cross-referenced.
+- **Why it matters:** Cross-iteration tracking is the entire value proposition of Finding 5's resolution. Without stable ID specification in the design, implementation will either produce brittle hashes (false negatives—treated as new when actually same issue) or require manual ID assignment (error-prone, defeats automation). When a finding reappears in iteration 2, the system must detect "this is Finding 3 from iteration 1" to show status history. Hash collisions or wording sensitivity make this unreliable.
+- **Suggestion:** Add to design doc: ID generation algorithm specification. Options: (1) Semantic hash (section + first 100 chars of issue, normalized for whitespace/punctuation), (2) Reviewer-assigned with strict format rules (`AH-001` = Assumption Hunter finding 1), (3) Hybrid (auto-hash with reviewer override for cross-iteration linking), (4) Use LLM to match findings semantically ("is this the same issue as prior iteration Finding 3?"). Document hash collision handling (when two distinct findings produce same ID). For MVP, recommend semantic matching via LLM (Synthesizer asks "which prior findings does this match?" when processing each new finding).
+- **Iteration status:** New finding
 
-### Finding 2: Unbounded review time with no progress indication
-- **Severity:** Important
-- **Phase:** design
-- **Section:** Step 2: Dispatch, Step 3: Synthesize
-- **Issue:** Running 6 reviewers in parallel with potentially large design docs could take minutes. User sees "Running 6 reviewers in parallel..." but no indication of progress, completion estimates, or which reviewers have finished.
-- **Why it matters:** Long-running operations without progress feedback feel broken. Users may interrupt the process thinking it's stuck, wasting tokens and time. Per-reviewer time variance (Prior Art Scout may need web search, Assumption Hunter may finish in 30 seconds) means total time is unpredictable.
-- **Suggestion:** Stream progress updates as reviewers complete ("Assumption Hunter: done [1/6]", "Edge Case Prober: done [2/6]"). Show elapsed time. Consider timeout per reviewer (e.g., 120 seconds max).
-
-### Finding 3: No protection against reviewer hallucination or malformed output
-- **Severity:** Important
-- **Phase:** design
-- **Section:** Per-Reviewer Output Format, Step 3: Synthesize
-- **Issue:** The design assumes reviewers will produce well-formed markdown with the expected structure (### Finding N, severity, phase, etc.). If a reviewer produces malformed output, the synthesizer may fail to parse findings or misclassify them.
-- **Why it matters:** LLMs occasionally produce off-format output (especially under pressure, with large context, or at high temperature). A single malformed finding can break synthesis, leaving the user with raw reviewer output and no consolidated summary.
-- **Suggestion:** Add validation layer before synthesis: (1) Parse each reviewer output against expected schema, (2) Flag malformed findings with severity "unknown" and phase "parse-failed", (3) Include parse errors in summary for debugging, (4) Allow synthesis to proceed with partial data rather than hard fail.
-
-### Finding 4: Synthesizer contradictions escalate to user with no resolution guidance
-- **Severity:** Important
-- **Phase:** design
-- **Section:** Synthesis, Summary Format (Contradictions section)
-- **Issue:** When reviewers disagree, the synthesizer presents both positions with "user resolves" but provides no framework for resolution. The user must decide between conflicting technical opinions without guidance on which reviewer's lens is more relevant to this specific tension.
-- **Why it matters:** Contradictions are high-value findings (they surface real design tensions), but dumping them on the user without structure creates decision paralysis. Example: Feasibility Skeptic says "too complex, use SQLite," Prior Art Scout says "don't reinvent, use Postgres." Both are valid from their lenses — which wins depends on context the user may not have.
-- **Suggestion:** Enhance contradiction presentation: (1) Surface the underlying tension explicitly ("tradeoff: simplicity vs leveraging existing tools"), (2) Include relevant context from design/requirements that might resolve it, (3) Suggest tie-breaking criteria ("if timeline < 1 week, favor simplicity"), (4) Allow user to request deeper analysis from both reviewers before deciding.
-
-### Finding 5: Discuss mode has no conversation termination criteria
-- **Severity:** Important
-- **Phase:** design
-- **Section:** Step 5: Process Findings (Discuss interaction)
-- **Issue:** The design allows "full back-and-forth conversation" during Discuss mode but doesn't specify how the conversation ends. No depth limit, no token budget, no explicit "resolve" command. A single finding discussion could consume unbounded tokens or drift off-topic.
-- **Why it matters:** Unconstrained conversation can become circular ("but what about...", "yes, but...") or waste tokens on tangents. Without explicit termination, the user may forget they're in Discuss mode for Finding 3 of 40 and lose track of the review workflow.
-- **Suggestion:** Add discussion boundaries: (1) Max turn count per finding discussion (e.g., 5 exchanges), (2) Explicit "resolve and decide" command to exit discussion and make accept/reject choice, (3) Show context reminder ("Discussing Finding 3/40: [title]") at each turn, (4) Allow user to defer decision ("skip for now, come back later").
-
-### Finding 6: Re-review after revisions may produce identical findings
-- **Severity:** Important
-- **Phase:** design
-- **Section:** Step 6: Wrap Up (revise flow), Iteration Loops
-- **Issue:** When verdict is "revise," the user updates the design and re-runs `parallax:review`. The reviewers have no memory of previous findings or what was changed. They may re-flag the same issues if the fix wasn't clear, or miss new issues introduced by the revision.
-- **Why it matters:** Re-review waste: if the user addressed a finding but the reviewer can't tell (because the fix was subtle or in a different section), the same finding reappears, frustrating the user. Also, reviewers won't focus extra scrutiny on newly-changed sections where bugs are most likely.
-- **Suggestion:** Provide iteration context to reviewers: (1) Include previous summary.md in reviewer context ("last review flagged X, check if addressed"), (2) Highlight changed sections if possible (git diff), (3) Ask reviewers to explicitly note "previously flagged, now resolved" vs "new finding" vs "still an issue", (4) Track finding IDs across iterations to auto-detect duplicates.
-
-### Finding 7: Empty or trivial design docs may produce no findings
-- **Severity:** Minor
-- **Phase:** design
-- **Section:** Step 2: Dispatch
-- **Issue:** If the user provides a very short or incomplete design doc (e.g., "TODO: write design"), reviewers may struggle to produce meaningful findings. They might hallucinate issues, return "insufficient detail" meta-findings, or produce empty output.
-- **Why it matters:** Garbage in, garbage out. Running a full 6-agent review on a stub design wastes tokens and produces confusing output. The user expects actionable findings, not "this design is too short to review."
-- **Suggestion:** Add pre-flight check: (1) Validate design doc length (e.g., min 500 words or 10 headings), (2) If too short, return early with "design incomplete, minimum review threshold not met", (3) Alternatively, shift reviewers into "incompleteness audit" mode (flag missing sections rather than reviewing content).
-
-### Finding 8: Severity ranges create ambiguity in verdict logic
-- **Severity:** Important
-- **Phase:** design
-- **Section:** Synthesis (severity ranges), Verdict Logic
-- **Issue:** The synthesizer reports severity ranges when reviewers disagree ("Flagged Critical by Assumption Hunter, Important by Feasibility Skeptic") but the verdict logic uses "any Critical finding → revise." This creates ambiguity: is a finding with range "Critical-to-Important" treated as Critical (blocks proceed) or Important (allows proceed)?
-- **Why it matters:** Inconsistent verdict logic undermines trust. If a finding is Critical to one reviewer but Important to another, and the verdict is "revise," the user doesn't know if they can negotiate it down or if it's a hard blocker. Worse, if the synthesizer picks the lower severity to avoid conservatism, real critical issues may be downgraded.
-- **Suggestion:** Clarify severity range handling: (1) Use highest severity in range for verdict logic (conservative: any reviewer says Critical → treat as Critical), (2) Explicitly state rule in summary, (3) Allow user to override severity during finding processing (downgrade Critical to Important if they judge the lower severity is correct).
-
-### Finding 9: Finding phase classification errors could route to wrong pipeline stage
+### Finding 2: Prior Summary Context May Exceed Token Limits on Long Review Chains
 - **Severity:** Critical
-- **Phase:** design
-- **Section:** Finding Phase Classification, Verdict Logic
-- **Issue:** The synthesizer classifies findings by pipeline phase (survey gap, calibrate gap, design flaw, plan concern), but phase classification is a judgment call that could be wrong. Misclassifying a design flaw as a "calibrate gap" would escalate unnecessarily, restarting requirements when the design just needs a fix. Misclassifying a calibrate gap as a "design flaw" would attempt to patch a broken requirement instead of fixing it upstream.
-- **Why it matters:** The entire value proposition of finding classification is routing errors to the phase that failed. If classification is unreliable, the system wastes time (false escalation) or produces bad designs (missed escalation). This is the core novel contribution — if it's broken, the tool has no advantage over manual review.
-- **Suggestion:** Add classification confidence and validation: (1) Reviewers suggest phase in their findings (they have the most context), synthesizer reconciles disagreements, (2) Include classification reasoning in summary ("Classified as calibrate gap because requirements don't address failure mode X"), (3) Allow user to override classification during finding processing, (4) Track classification errors in eval framework to tune synthesizer prompts.
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Finding 5 disposition (prior summary fed to reviewers), Cross-iteration context
+- **Issue:** Each reviewer receives "prior summary" as context on re-review. If design goes through 5 iterations with 30+ findings each, prior summary grows to 10k+ tokens. With 6 reviewers each receiving full prior context + design doc + requirements, token usage explodes. After 3-4 iterations, input context could exceed model limits or consume entire prompt caching budget.
+- **Why it matters:** Long review chains are exactly the scenario where cross-iteration tracking is most valuable (complex designs requiring multiple refinement passes). But feeding all prior history to all reviewers on every iteration is unsustainable. Iteration 5 would be significantly more expensive than iteration 1, with no cost ceiling specified in the design.
+- **Suggestion:** Add to design: prior context pruning strategy. Options: (1) Reviewers receive only their own prior findings + high-severity findings from other reviewers (not full summary), (2) Prior findings marked "resolved" are summarized rather than included verbatim, (3) Hard cap on prior context (e.g., most recent 2 iterations only), (4) Use finding IDs to reference prior context by ID rather than full text ("Check if Finding AH-003 from iteration 2 is resolved"). For plan stage: implement context windowing before hitting token limits in production.
+- **Iteration status:** New finding
 
-### Finding 10: No handling for design vs requirements contradiction
+### Finding 3: "Reject-with-Note" Disposition Has No Schema or Processing
 - **Severity:** Important
-- **Phase:** design
-- **Section:** Requirement Auditor persona, Input contract
-- **Issue:** Requirement Auditor checks if design satisfies requirements, but the design doesn't specify what happens if the *requirements themselves* are contradictory or impossible to satisfy together. The design can't fix this — it's upstream — but the review may not surface it clearly.
-- **Why it matters:** Contradictory requirements are a calibrate-phase failure, not a design-phase failure. If the requirements say "must be zero-latency" and "must run on free tier," no design can satisfy both. The reviewer should escalate immediately, but the design doesn't explicitly call this out as a distinct failure mode.
-- **Suggestion:** Add explicit check: Requirement Auditor should flag requirement-level contradictions as automatic escalate (calibrate gap, severity Critical). Don't attempt design iteration — requirements need fixing first.
+- **Phase:** design (primary)
+- **Section:** Finding 6 disposition (reject-with-note), Step 5: Process Findings
+- **Issue:** Finding 6 disposition replaces "discuss" mode with "reject-with-note—rejection note becomes calibration input to next review cycle." What happens to these notes is unspecified in the design. Where are they stored? Who reads them (user? synthesizer? specific reviewer in next iteration?)? What format (freeform text? structured fields?)? If note says "This finding assumes wrong architecture, we're using event-driven not REST," how does that context reach the reviewers who need it?
+- **Why it matters:** Reject-with-note is now the primary mechanism for handling disputed findings and capturing design decisions. Without schema or processing specified in the design, notes become write-only data (captured but never used). Calibration value is lost. User effort wasted.
+- **Suggestion:** Add to design: rejection note schema and processing flow. Specify: (1) Notes stored in summary.md under each rejected finding, (2) Rejected findings + notes included in prior summary sent to reviewers on re-review (separate section: "Previously rejected findings and why"), (3) Synthesizer checks if rejected findings reappear and surfaces to user ("Finding 12 was rejected in iteration 1 with note 'not applicable because X', but Edge Case Prober flagged it again—reconsider?"), (4) Rejection notes feed into calibration loop (Finding 29 concern—deferred but needs placeholder).
+- **Iteration status:** New finding
 
-### Finding 11: Git commit failures could lose review artifacts
+### Finding 4: Async-Default Mode Has No Resumption Specification
 - **Severity:** Important
-- **Phase:** plan
-- **Section:** Step 6: Wrap Up ("All artifacts committed to git")
-- **Issue:** The design assumes git commit will succeed, but git operations can fail (detached HEAD, merge conflicts, repo in bad state, disk full). If commit fails after review completes, the review artifacts exist on disk but aren't tracked, risking loss on cleanup or confusion about which review is "official."
-- **Why it matters:** Review artifacts are valuable (especially after 6-agent runs consuming significant tokens). Losing them due to git failure is bad UX and data loss. Silent failure is worse — user thinks review is saved but it's not.
-- **Suggestion:** Add git operation validation: (1) Check git status before review starts (warn if repo is dirty or detached), (2) After writing review artifacts, explicitly commit and check success, (3) If commit fails, warn user and explain how to manually commit from `docs/reviews/<topic>/`, (4) Consider writing artifacts even if git is unavailable (graceful degradation).
+- **Phase:** design (primary)
+- **Section:** Finding 2 disposition (async is default), UX Flow
+- **Issue:** Finding 2 disposition states "Async is the default—review always writes artifacts to disk. Interactive mode reuses those same artifacts as a convenience layer." This means: (1) Review runs overnight, writes findings to disk, (2) User processes findings next morning. But the design doesn't specify how resumption works. If user closes terminal after review completes, how do they invoke "process findings from docs/reviews/topic-12345/"? Is it a separate skill invocation? A flag on parallax:review (e.g., --resume)? Does the skill detect incomplete reviews on startup?
+- **Why it matters:** Async mode is the baseline architecture per disposition note, but there's no interface specification in the design for the second half of the workflow (processing pre-written findings). Users will run reviews overnight, come back the next day, and have no clear path to "pick up where review left off."
+- **Suggestion:** Add to design: resumption interface specification. Options: (1) `parallax:review --resume <topic>` loads findings from existing review folder and enters processing mode, (2) Skill checks on invocation whether target topic already has unprocessed findings and prompts user ("docs/reviews/topic-12345/ has 23 unprocessed findings. Resume processing? [y/n]"), (3) Document that summary.md tracks processing state (findings with no disposition = unprocessed) and skill uses this to resume.
+- **Iteration status:** New finding
 
-### Finding 12: Topic label collision overwrites previous reviews
-- **Severity:** Minor
-- **Phase:** design
-- **Section:** Output Artifacts (docs/reviews/<topic>/)
-- **Issue:** If the user runs `parallax:review` twice with the same topic label, the second run overwrites the first review's files in `docs/reviews/<topic>/`. The design relies on git history to track iterations, but the working directory only shows the latest review.
-- **Why it matters:** If the user re-reviews with the same topic before committing the first review, the first review is lost (unless they manually saved it elsewhere). Even with git commits, navigating history to compare review N vs review N+1 is cumbersome.
-- **Suggestion:** Add iteration tracking to topic folder: (1) Append timestamp or iteration number to folder name (`docs/reviews/<topic>-20260215-1/`), or (2) Use subdirectories (`docs/reviews/<topic>/iteration-1/`, `iteration-2/`), or (3) Warn user if topic folder exists and prompt to confirm overwrite.
-
-### Finding 13: Large finding counts overwhelm interactive processing
+### Finding 5: Timestamped Folder Collision Handling Breaks Git Diff Workflow
 - **Severity:** Important
-- **Phase:** design
-- **Section:** Step 5: Process Findings (All findings mode)
-- **Issue:** The design supports processing "every finding one by one" but doesn't address scale. If a design has 40+ findings (observed in test case "Second Brain Design"), walking through all of them interactively could take 30+ minutes and cause decision fatigue.
-- **Why it matters:** The test cases explicitly include a session with 40+ findings. Interactive processing of that volume is painful and error-prone (user may rush through later findings or abandon the review). The design provides "critical-first" mode to mitigate this, but it's optional — users may not know to use it.
-- **Suggestion:** Add smart defaults and batching: (1) Auto-suggest critical-first mode when finding count > 15, (2) Allow bulk operations ("accept all Minor findings from Assumption Hunter"), (3) Group related findings for batch decision ("these 5 findings all say the same thing, accept all?"), (4) Support "defer" to skip findings and return later.
+- **Phase:** design (primary), calibrate (contributing)
+- **Section:** Finding 10 disposition (timestamped folders), Output Artifacts, Requirements (git diffing across iterations)
+- **Issue:** Finding 10 disposition specifies "timestamped folders for collision handling" (e.g., `docs/reviews/topic-2026-02-15-143022/`). But requirements doc emphasizes "Git commits per iteration. Full history, diffable artifacts" and "diffs show what changed." If each iteration creates a new timestamped folder, git diff between iterations compares completely different file paths—useless. You lose iteration diffing, which was a core design goal stated in requirements.
+- **Why it matters:** Timestamped folders solve collision problem but break diffability. `git diff HEAD~1` shows "deleted docs/reviews/topic-2026-02-15-143022/, added docs/reviews/topic-2026-02-15-150312/" rather than showing which findings changed. The disposition note contradicts the requirement. This is a calibrate gap (requirement for git-based iteration tracking conflicts with timestamp-based collision handling).
+- **Suggestion:** Revise disposition or update design to resolve contradiction. Options: (1) Single folder per topic, overwrite files on re-review, rely on git history for iteration tracking (diffs work, collision handled by overwrite), (2) Timestamped folders but add symlink `docs/reviews/topic-latest/` pointing to most recent, and synthesizer produces diff report comparing current iteration to prior, (3) Nested iteration structure: `docs/reviews/topic/iteration-1/`, `docs/reviews/topic/iteration-2/` with iteration counter rather than timestamp. Recommend option 1 for MVP (simplest, satisfies diffing requirement).
+- **Iteration status:** New finding
 
-### Finding 14: No cost or token usage visibility during review
-- **Severity:** Minor
-- **Phase:** design
-- **Section:** Step 2: Dispatch, Step 3: Synthesize
-- **Issue:** Running 6 agents in parallel on large design docs could consume significant tokens (thousands of input tokens per reviewer, especially with prompt caching disabled on first run). The design doesn't show cost estimates before running or actual token usage after completion.
-- **Why it matters:** Budget-conscious users may want to know the cost before committing to a 6-agent review, especially for large designs or when iterating multiple times. Post-run token reporting helps tune reviewer prompts (identify verbose reviewers) and validates cost assumptions.
-- **Suggestion:** Add cost visibility: (1) Estimate token cost before dispatch based on design doc size and reviewer count, (2) Report actual token usage and cost per reviewer in summary, (3) Track cumulative cost across iterations for the same topic, (4) Warn if estimated cost exceeds threshold (e.g., $1+ for a single review).
+### Finding 6: Auto-Fix Git Commit May Overwrite User's Unrelated Changes
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Finding 4 disposition (auto-fix as separate commit), Step 6: Wrap Up
+- **Issue:** Finding 4 disposition specifies "Auto-fix step between synthesis and human processing. Git history must show auto-fixes as separate commit from human-reviewed changes." Auto-fixes modify the design doc on disk (fix typos, broken links, etc.), then commit those changes. But if user has made other edits to the design doc between starting the review and processing findings (e.g., review ran overnight, user made morning edits before checking results), auto-fix commit includes unrelated changes. Worse: if auto-fix step runs before user sees findings, it modifies the file before user can reject the fixes.
+- **Why it matters:** Auto-fix as described is invasive—modifies source files automatically without user approval. Conflicts with Git Safety Protocol ("NEVER commit changes unless user explicitly asks"). If auto-fix is applied before user processing, user can't reject bad auto-fixes (e.g., "fixed" link was intentionally broken as TODO marker). If applied after, separate commit is impossible (human changes intermixed).
+- **Suggestion:** Revise auto-fix workflow in design. Options: (1) Auto-fixes presented to user as suggested changes (patch/diff format), user approves before application, (2) Auto-fixes applied to copy of design doc, not original (user merges if approved), (3) Auto-fixes deferred to post-human-processing (user accepts/rejects findings, then auto-fixable accepted findings are applied as batch), (4) Conservative auto-fix criteria (only formatting/whitespace, no semantic changes) with explicit user approval. For MVP, recommend option 3 (auto-fix is post-processing of accepted findings, not pre-processing).
+- **Iteration status:** New finding
 
-### Finding 15: Blind spot checks may duplicate findings or add noise
+### Finding 7: Interactive Processing State Loss on Crash or Interruption
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Step 5: Process Findings (interactive mode), Summary.md updates
+- **Issue:** User processes findings one-by-one in interactive mode (accept/reject/note). If terminal crashes, network drops, or user interrupts (Ctrl-C) mid-processing, what's the state? Design says summary.md is updated with dispositions, but doesn't specify when—after each finding (incremental save) or at the end of processing (batch save)?
+- **Why it matters:** If dispositions are saved only at end, crash loses all progress (user must re-process 41 findings from scratch). If saved incrementally, partial processing is recoverable, but interrupted processing leaves summary.md in partial state (some findings processed, some not). On resume, does skill start from first unprocessed finding, or does user have to track manually?
+- **Suggestion:** Specify in design: incremental state persistence. (1) summary.md updated after each finding disposition (crash-safe), (2) On resume (user re-invokes skill on same topic), skill detects partial processing and offers to continue from last processed finding, (3) Add finding index/ID to dispositions so resume position is unambiguous. This is essentially the same resumption logic as Finding 4 (async mode) but applied to interactive mode interruptions.
+- **Iteration status:** New finding
+
+### Finding 8: Synthesizer Phase Classification Disagreements Not Reconciled
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Finding 7 disposition (reviewers suggest phase, synthesizer reconciles), Synthesis responsibilities
+- **Issue:** Finding 7 disposition specifies "Reviewers suggest phase in their findings, synthesizer reconciles disagreements with reasoning." What happens when reconciliation is ambiguous? Example: Assumption Hunter flags "assumes X" (calibrate gap—requirement didn't specify X), Edge Case Prober flags "doesn't handle X" (design flaw—design should handle it). Same issue, different phase classification. Synthesizer must pick one or classify as both (primary + contributing). If reviewers disagree 3-to-2 (3 say design, 2 say calibrate), does majority win? Consensus rule unspecified in design.
+- **Why it matters:** Phase classification drives verdict logic (calibrate gap → escalate, design flaw → revise). Wrong classification wastes time or produces bad designs. If synthesizer has no tie-breaking rule, it either makes arbitrary decisions (bad) or punts every disagreement to user as contradiction (defeats automation).
+- **Suggestion:** Add to design: phase reconciliation rules. Specify: (1) When reviewers disagree, use primary + contributing classification (both recorded, action is based on primary), (2) Primary phase = most common suggestion from reviewers (majority vote), (3) If tied, escalate conservatively (calibrate > design > plan), (4) Synthesizer includes reasoning in summary ("3 reviewers classified as design flaw, 2 as calibrate gap; majority classification used"), (5) User can override during processing. Add to synthesizer prompt as explicit responsibility.
+- **Iteration status:** New finding
+
+### Finding 9: "Systemic Issue Detection" Threshold Arbitrary and Untested
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Finding 7 disposition (systemic issue detection when >30% share root cause)
+- **Issue:** Finding 7 disposition adds "systemic issue detection when >30% of findings share a common root cause." The 30% threshold is arbitrary (why not 25%? 40%?). "Share a common root cause" is subjective—how does synthesizer determine this? If 12/41 findings trace to "missing error handling," is that 29% (not systemic) or does it round to 30% (systemic)? Who defines "root cause categories"?
+- **Why it matters:** If threshold is too low, every review triggers false systemic escalations. If too high, real systemic issues are missed. Root cause attribution is judgment-heavy work requiring semantic analysis. Synthesizer must either have taxonomy of root causes or perform ad-hoc clustering, both error-prone and not specified in design.
+- **Suggestion:** Either add systemic detection specification to design or defer to post-MVP. If implemented, design must specify: (1) Root cause taxonomy (explicit categories like "missing requirements," "unstated assumptions," "feasibility concerns"), (2) Reviewers tag findings with root cause category (shifts judgment from synthesizer to reviewers), (3) Threshold configurable per topic (user sets expectation), (4) Systemic issue detection is advisory ("possible systemic issue detected"), not automatic escalation. Alternatively, start with manual pattern detection (user reads summary and decides) until eval data shows automated detection is reliable.
+- **Iteration status:** New finding
+
+### Finding 10: No Guidance on When to Stop Re-Reviewing
+- **Severity:** Important
+- **Phase:** calibrate (primary)
+- **Section:** Verdict Logic, UX Flow (revise iteration loop)
+- **Issue:** Design specifies `revise` verdict triggers re-review after user updates design. But there's no exit condition in the design. If iteration 2 produces new Critical findings (different from iteration 1), user revises again. Iteration 3 produces more findings. When does the loop end? When findings count reaches zero (unrealistic)? When no new Critical findings appear (ignoring Important)? When user manually decides "good enough"?
+- **Why it matters:** Without stopping criteria in the design, reviews can iterate indefinitely. Real designs have tradeoffs—some edge cases are deferred intentionally, some Important findings are accepted as constraints. Current design treats all Critical findings as blockers but provides no framework for "this Critical finding is acceptable risk, proceed anyway." User has no guidance on whether 3 iterations is normal or a signal the design is fundamentally broken.
+- **Suggestion:** Add to design: review convergence criteria. Options: (1) Explicit "good enough" threshold (e.g., "2 consecutive iterations with no new Critical findings"), (2) Allow user to override verdict ("proceed despite Critical findings" with required justification), (3) Track iteration count and flag if >3 iterations (signal: design may have fundamental issues, consider escalate or full redesign), (4) Add "defer" disposition for findings user accepts as out-of-scope (not counted against verdict in next iteration). Document that indefinite iteration is a design smell.
+- **Iteration status:** New finding
+
+### Finding 11: "Critical-First" Mode Orphans Non-Critical Findings Across Iterations
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Step 4: Present Summary (Critical-first mode), Finding processing
+- **Issue:** Critical-first mode processes only Critical findings, then user revises design and re-reviews. Iteration 2 produces new findings (some overlap with prior Important/Minor from iteration 1, some new). User processes Critical-first again. Important findings from iteration 1 are never processed—orphaned. After 3 iterations of Critical-first, there may be 40+ unprocessed Important findings spanning multiple iterations. Design doesn't address this accumulation.
+- **Why it matters:** Critical-first is designed for fast iteration, but it creates accumulating technical debt of unprocessed findings. Eventually user must process all orphaned findings or accept that valuable feedback (Important findings) was discarded. No mechanism in the design tracks which findings are carried forward unprocessed vs which are obsoleted by design changes.
+- **Suggestion:** Add to design: orphaned finding management for Critical-first workflow. Specify: (1) After Critical-first processing, synthesizer marks remaining findings as "deferred to next iteration," (2) On re-review, synthesizer reconciles prior deferred findings with new findings (deduplicate, mark obsolete if design changed that section), (3) After revise loop converges (no new Critical findings), user is prompted to process accumulated deferred findings, (4) Alternative: Critical-first mode includes Important findings related to same root cause as Critical findings (addresses clusters, not just isolated Critical). Document tradeoff.
+- **Iteration status:** New finding
+
+### Finding 12: JSONL Format Noted But Not Specified in Design
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Finding 14 disposition (JSONL format enables filtering), Output Artifacts
+- **Issue:** Finding 14 disposition states "JSONL format enables this naturally—jq filters by severity/persona/phase without LLM tokens." But design doc specifies markdown output format throughout (see "Per-Reviewer Output Format" and "Summary Format" sections). JSONL mentioned in MEMORY.md as "decided but not yet implemented. Current markdown works for MVP." No schema, field definitions, or migration path specified in design. Design and disposition notes conflict.
+- **Why it matters:** Multiple disposition notes reference JSONL as solution (Finding 11 cost tracking, Finding 14 filtering, Finding 29 calibration data). If JSONL is core output format, it should be in the design. If it's deferred, disposition notes shouldn't reference it as solved. Current ambiguity makes implementation unclear—should MVP implement JSONL or markdown?
+- **Suggestion:** Add to design: output format specification. Either (1) Add JSONL output format section with schema (findings as JSON objects, summary as metadata, one finding per line), specify markdown is human-readable rendering of JSONL, OR (2) Update disposition notes to clarify JSONL is post-MVP enhancement, markdown is baseline for prototype. Specify migration path if format changes (parsers for both formats, conversion script).
+- **Iteration status:** New finding
+
+### Finding 13: Parallel Review Execution May Hit Rate Limits
+- **Severity:** Important
+- **Phase:** plan (primary)
+- **Section:** Step 2: Dispatch (6 reviewers in parallel)
+- **Issue:** Dispatching 6 reviewers in parallel means 6 simultaneous API calls to Claude. If each reviewer uses Sonnet (rate limit: varies by tier, typically 50-100 requests/minute for free tier, higher for paid), parallel dispatch is usually safe. But if user is running multiple reviews concurrently (e.g., testing on 4 test cases in parallel), that's 24 simultaneous requests. Rate limits may be hit, causing some reviewers to fail with 429 errors.
+- **Why it matters:** Finding 1 (parallel agent failure handling) from prior review was marked RESOLVED with retry logic, but retrying rate limit errors with exponential backoff could add 30-60 seconds to review time. If rate limit is persistent (user is near quota), all retries fail and review completes with partial results. Design doesn't specify whether parallel execution is configurable (user could serialize reviewers to avoid rate limits).
+- **Suggestion:** Add to design: rate limit awareness. Specify: (1) Make parallelism configurable (default 6, user can set to 3 or 1 for serial execution), (2) Implement request pacing (stagger reviewer dispatch by 1-2 seconds to smooth rate limit usage), (3) Document rate limit failures in summary and suggest reducing parallelism if frequent, (4) For batch API mode (future), this is non-issue (batch API has separate limits). For MVP, default to parallel but allow user override.
+- **Iteration status:** New finding
+
+### Finding 14: Requirements Doc as Input May Be Stale or Mismatch Design
 - **Severity:** Minor
-- **Phase:** design
-- **Section:** Per-Reviewer Output Format (Blind Spot Check)
-- **Issue:** Each reviewer ends with a "Blind Spot Check" where they explicitly ask "what might I have missed?" This could produce duplicate findings (reviewer flags X in Findings, then flags "I might have missed X" in blind spot check), meta-findings ("I'm not a security expert so I might have missed security issues" — but there's a separate security reviewer), or noise ("I might have missed performance concerns" without actionable detail).
-- **Why it matters:** The blind spot check is self-error-detection, which is valuable in theory. In practice, it may just produce hedged non-findings that clutter the summary or confuse the synthesizer. The design says this is an "empirical question for the eval framework" but doesn't specify fallback if it's noise.
-- **Suggestion:** Test blind spot checks empirically, with clear removal criteria: (1) If blind spot checks produce <10% novel findings across 10 test reviews, remove them, (2) Alternatively, move blind spot checks to a separate optional section (not mixed with findings), (3) Train synthesizer to ignore meta-findings ("I might have missed X") and only surface actionable blind spot findings.
+- **Phase:** design (primary)
+- **Section:** Skill Interface (Requirements artifact input), Reviewer personas (Requirement Auditor)
+- **Issue:** Skill accepts "Requirements artifact" as file path, but design doesn't specify validation that requirements are current or match the design being reviewed. If user points to wrong requirements doc (copy-paste error, wrong version), reviewers audit design against incorrect requirements, producing irrelevant findings.
+- **Why it matters:** Garbage in, garbage out. Requirement Auditor would flag "design violates requirement X" when design was intentionally scoped differently. False positives waste user time. Low probability (user usually knows which requirements apply) but high impact when it occurs.
+- **Suggestion:** Add to design: input validation specification. Options: (1) Check that requirements doc and design doc reference each other (cross-link check), (2) Include metadata in requirements/design (version, date, topic) and validate consistency, (3) Show user a preview/confirmation ("Reviewing design.md against requirements.md—correct? [y/n]") before dispatching reviewers, (4) If validation fails, prompt user to confirm override. Low-priority for MVP (trust user to provide correct inputs).
+- **Iteration status:** New finding
+
+### Finding 15: Re-Review Diff Highlighting Unspecified
+- **Severity:** Minor
+- **Phase:** design (primary)
+- **Section:** Finding 17 disposition (highlight changed sections via git diff)
+- **Issue:** Prior Finding 17 (now Finding 6) disposition suggests "Highlight changed sections if possible (git diff)" as part of iteration context fed to reviewers. How this is presented is unspecified in the design. If full git diff is included in reviewer context, it adds 1k+ tokens per reviewer (expensive). If diff summary is included ("Sections changed: Architecture, Error Handling"), reviewers don't see what specifically changed. If reviewers are told to use git diff themselves, that's tool access not specified in design.
+- **Why it matters:** Reviewers focusing scrutiny on changed sections (where bugs are most likely) is high-value. But unspecified implementation could be expensive (full diff bloats tokens), incomplete (summary too vague), or impossible (reviewers lack git access). Disposition note suggests feature without design specification.
+- **Suggestion:** Add to design: diff presentation specification for re-review. Options: (1) Include section-level change summary in reviewer context ("Sections modified since iteration 1: Architecture, UX Flow, Synthesis"), (2) Full diff available on request (reviewers can ask for specific section diff), (3) Use line-level diff markers in design doc (e.g., `<!-- CHANGED -->` annotations), (4) Defer to post-MVP if token cost is prohibitive. For MVP, recommend option 1 (simple section-level summary from git diff --stat).
+- **Iteration status:** New finding
+
+### Finding 16: Reviewer Tool Access Noted But Design Unchanged
+- **Severity:** Minor
+- **Phase:** design (primary)
+- **Section:** Finding 21 disposition (specify reviewer tool access), Reviewer capabilities
+- **Issue:** Prior Finding 21 disposition states "Valid—specify reviewer tool access in Task 8 prompt iteration. Per-persona tool boundaries belong in the stable prompt prefix." But Task 8 is implementation/prompt tuning, not design. If tool access is architectural (which tools reviewers can use affects what they can verify), it should be in the design. If Prior Art Scout needs `curl` to fetch docs or `gh` to search repos, design should specify this, not just implementation prompts.
+- **Why it matters:** Tool access affects review quality and security boundaries. If reviewers have read-write tool access, they could modify files accidentally. If they have no tool access, they can't verify assumptions (e.g., "check if this API exists" requires network call). Design is incomplete without tool boundaries specification.
+- **Suggestion:** Add to design: "Reviewer Capabilities" section. Specify: (1) All reviewers have read-only file access (can reference other docs in repo), (2) Prior Art Scout additionally has `curl` (fetch public URLs), `gh` (search GitHub repos), (3) No reviewers have write access or ability to execute code, (4) Tool access specified in reviewer prompt prefix (part of stable cached prompt). Low urgency for MVP (reviewers primarily analyze provided artifacts, not external research), but belongs in design for completeness.
+- **Iteration status:** New finding
+
+### Finding 17: Verdict "Escalate" Has No UX Specification
+- **Severity:** Minor
+- **Phase:** design (primary)
+- **Section:** Verdict Logic (escalate path), Step 6: Wrap Up
+- **Issue:** Design says "If escalate: skill tells user which upstream phase to revisit and why, then exits." No specification of what "tells user" means in the design. Is it a message in summary.md? A separate escalation report? An interactive prompt? If user is in async mode and review ran overnight, how do they discover the escalation?
+- **Why it matters:** Escalate is a critical path (fundamental design issue requires upstream fix). If escalation message is buried in summary.md alongside other findings, user may miss it. Needs clear signaling specified in design.
+- **Suggestion:** Add to design: escalation UX specification. Specify: (1) summary.md includes prominent escalation section at top (above findings), (2) Escalation message includes: which phase to revisit, which findings triggered escalation, suggested next steps, (3) In interactive mode, escalation pauses processing and prompts user to confirm ("This review found calibrate gaps. Recommend revisiting requirements before continuing. Proceed anyway? [y/n]"), (4) In async mode, escalation verdict is in summary.md header. Low urgency (UX polish) but worth documenting.
+- **Iteration status:** New finding
+
+---
 
 ## Blind Spot Check
 
-**What might I have missed given my focus on edge cases and failure modes?**
+Given my focus on edge cases and failure modes, I may have missed:
 
-1. **Happy path usability issues:** I focused on what breaks, not on whether the happy path is intuitive or efficient. The interactive finding processing may have UX friction even when everything works (e.g., no undo for accept/reject decisions, no finding search/filter, no summary export).
+1. **Positive path optimization:** I flag cases where things break, but successful reviews that complete in <1 minute with zero findings may have performance optimizations I haven't considered. If most reviews are "proceed with no changes," is the 6-agent dispatch overkill?
 
-2. **Persona prompt engineering quality:** I reviewed the design structure but didn't deeply analyze whether the reviewer personas will actually produce diverse, high-quality findings. Prompt quality is "the product" per the problem statement — if persona prompts are weak, the entire system produces garbage. This is a calibrate/plan concern (requirements state persona engineering matters, plan should validate prompts).
+2. **User experience quality beyond errors:** I focus on crash/data loss/ambiguity, but other reviewers (First Principles, Product Strategist) would better evaluate whether the interactive workflow is actually pleasant to use or frustrating even when it works correctly.
 
-3. **Integration with superpowers skills:** The design mentions leveraging `dispatching-parallel-agents` from superpowers but doesn't specify the integration boundary. If superpowers APIs change or have undocumented constraints, the integration could break in unexpected ways. This is a feasibility concern (build vs leverage tradeoff).
+3. **Semantic correctness of findings:** I check whether the system handles findings correctly (storage, tracking, classification), but I don't evaluate whether the findings themselves are valid. Assumption Hunter and Requirement Auditor would catch if reviewers are flagging non-issues or missing real problems.
 
-4. **Synthesizer computational limits:** I flagged reviewer failures but didn't consider synthesizer failure modes. If the synthesizer receives 40 findings across 6 reviewers (240 items to consolidate), it may hit context limits, produce incomplete deduplication, or timeout. This is an edge case within synthesis itself.
+4. **Strategic architectural questions:** First Principles Challenger's prior Finding 26 (personas are coverage-focused, not truly adversarial) is the kind of foundational critique I wouldn't generate. I optimize for the design as stated, not challenge whether the design's core premise is correct.
 
-5. **Eval framework dependency:** Several findings suggest "track this in eval framework" or "tune via eval," but the eval framework doesn't exist yet (it's a future skill). The design has no fallback if eval-driven tuning isn't ready when parallax:review ships. This is a sequencing/dependency risk.
+5. **Long-term maintainability:** I flag immediate failure modes but not gradual degradation (e.g., prompt drift over months as models change, finding quality degradation as edge cases accumulate). Systems Architect would better evaluate operational concerns.
+
+6. **Cross-finding interactions:** I evaluate findings in isolation. If Finding 1 (parallel failure) interacts badly with Finding 13 (rate limits) under specific conditions, I may not connect those dots. Integration testing would surface this.
+
+7. **Design-vs-implementation gap:** Many of my findings note "disposition says X but design doc doesn't specify X." This is primarily a documentation issue—implementation may be correct but design doc is stale. I can't verify implementation correctness without code review.
