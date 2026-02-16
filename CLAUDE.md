@@ -18,6 +18,17 @@ The name comes from parallax — the apparent shift in an object's position when
 - **YAGNI ruthlessly:** Don't over-engineer. Build what's needed now, defer what isn't.
 - **SRE-influenced:** Premortem thinking, error budgets, blast radius scoping.
 
+## Subagent Tool Discipline
+
+Subagents inherit these rules. **Use dedicated tools, not bash equivalents:**
+- **Read files:** Use `Read` tool — never `cat`, `head`, `tail`
+- **Edit files:** Use `Edit` tool — never `sed`, `awk`
+- **Search file content:** Use `Grep` tool — never `grep`, `rg`
+- **Find files:** Use `Glob` tool — never `find`, `ls`
+- **Write files:** Use `Write` tool — never `echo >`, heredocs
+
+**Bash is only for commands that have no dedicated tool equivalent:** `git show`, `git diff`, `git log`, `npm`, `docker`, etc.
+
 ## Project Tracks (GitHub Issues)
 
 Each track is an independent investigation area, suitable for a separate session:
