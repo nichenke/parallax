@@ -18,16 +18,18 @@ FINDING_C = {
 
 def test_match_findings_exact_id():
     """Exact ID match takes priority."""
-    detected = match_findings(actual=[FINDING_A], expected=[FINDING_A])
+    detected, consumed = match_findings(actual=[FINDING_A], expected=[FINDING_A])
     assert len(detected) == 1
     assert detected[0]["id"] == "v3-test-001"
+    assert "v3-test-001" in consumed
 
 
 def test_match_findings_no_match():
     """Non-matching findings return empty list."""
     different = {"id": "v3-other-001", "title": "Something else", "severity": "Critical", "issue": "Unrelated"}
-    detected = match_findings(actual=[different], expected=[FINDING_A])
+    detected, consumed = match_findings(actual=[different], expected=[FINDING_A])
     assert detected == []
+    assert consumed == set()
 
 
 def test_match_findings_fuzzy_title_overlap():
@@ -39,19 +41,22 @@ def test_match_findings_fuzzy_title_overlap():
         "severity": "Critical",
         "issue": "v3 findings not validated"
     }
-    detected = match_findings(actual=[rephrased], expected=[FINDING_A])
+    detected, consumed = match_findings(actual=[rephrased], expected=[FINDING_A])
     assert len(detected) == 1
+    # consumed_actual_ids must record the actual finding's ID (v1-new-001), not the expected ID
+    assert "v1-new-001" in consumed
 
 
 def test_match_findings_partial_set():
     """Detects subset of expected findings."""
     expected = [FINDING_A, FINDING_B, FINDING_C]
     actual = [FINDING_A, FINDING_C]  # missed FINDING_B
-    detected = match_findings(actual=actual, expected=expected)
+    detected, consumed = match_findings(actual=actual, expected=expected)
     assert len(detected) == 2
     ids = [d["id"] for d in detected]
     assert "v3-test-001" in ids
     assert "v3-test-003" in ids
+    assert consumed == {"v3-test-001", "v3-test-003"}
 
 
 def test_match_findings_one_actual_cannot_satisfy_two_expected():
@@ -59,9 +64,10 @@ def test_match_findings_one_actual_cannot_satisfy_two_expected():
     exp_a = {"id": "v3-test-001", "title": "Ground truth validity assumed", "severity": "Critical", "issue": ""}
     exp_b = {"id": "v3-test-002", "title": "Ground truth validity assumption", "severity": "Critical", "issue": ""}
     actual = [{"id": "v3-fresh-001", "title": "Ground truth validity assumed", "severity": "Critical", "issue": ""}]
-    detected = match_findings(actual=actual, expected=[exp_a, exp_b])
+    detected, consumed = match_findings(actual=actual, expected=[exp_a, exp_b])
     # One actual finding should only satisfy one expected finding
     assert len(detected) == 1
+    assert consumed == {"v3-fresh-001"}
 
 
 def test_match_findings_no_id_field_does_not_raise():
@@ -69,7 +75,7 @@ def test_match_findings_no_id_field_does_not_raise():
     malformed = {"title": "Some finding", "severity": "Critical", "issue": "missing id"}
     expected = [FINDING_A]
     # Should not raise, should return empty (no match by ID, and title differs enough)
-    result = match_findings(actual=[malformed], expected=expected)
+    result, consumed = match_findings(actual=[malformed], expected=expected)
     assert isinstance(result, list)
 
 

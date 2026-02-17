@@ -6,11 +6,19 @@ def _title_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
-def match_findings(actual: list[dict], expected: list[dict]) -> list[dict]:
+def match_findings(
+    actual: list[dict], expected: list[dict]
+) -> tuple[list[dict], set[str | None]]:
     """
     Match actual review findings to expected ground truth findings.
     Strategy: exact ID match first, fuzzy title match fallback (>=0.8 similarity).
     Each actual finding can only satisfy one expected finding (no double-counting).
+
+    Returns:
+        (matched_expected, consumed_actual_ids) — the list of matched expected
+        findings and the set of actual finding IDs that were consumed.
+        consumed_actual_ids is needed by callers to compute false positives
+        correctly after fuzzy matching, where actual IDs differ from expected IDs.
     """
     matched = []
     consumed_actual_ids: set[str | None] = set()
@@ -39,7 +47,7 @@ def match_findings(actual: list[dict], expected: list[dict]) -> list[dict]:
                 consumed_actual_ids.add(act_id)
                 break
 
-    return matched
+    return matched, consumed_actual_ids
 
 
 def calculate_metrics(detected: int, actual: int, expected: int) -> tuple[float, float, float]:
@@ -59,10 +67,10 @@ def severity_calibration(recall_threshold: float = 0.90, precision_threshold: fl
     async def score(state, target):
         from evals.utils.output_parser import parse_review_output
 
-        actual_findings = parse_review_output(state.output.completion)
+        actual_findings = parse_review_output(state.output.completion, severity_filter="Critical")
         expected_findings = state.metadata.get("expected_findings", [])
 
-        detected = match_findings(actual=actual_findings, expected=expected_findings)
+        detected, consumed_actual_ids = match_findings(actual=actual_findings, expected=expected_findings)
 
         recall, precision, f1 = calculate_metrics(
             detected=len(detected),
@@ -73,8 +81,10 @@ def severity_calibration(recall_threshold: float = 0.90, precision_threshold: fl
         passes = recall >= recall_threshold and precision >= precision_threshold
 
         missed = [f["id"] for f in expected_findings if f not in detected]
-        false_positives = [f.get("id", f.get("title")) for f in actual_findings
-                          if not any(d["id"] == f.get("id") for d in detected)]
+        false_positives = [
+            f.get("id", f.get("title")) for f in actual_findings
+            if f.get("id") not in consumed_actual_ids
+        ]
 
         return Score(
             value=1.0 if passes else 0.0,
