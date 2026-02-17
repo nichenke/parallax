@@ -37,18 +37,18 @@ def _load_eval_log(path: Path) -> dict:
     Plain JSON files (e.g. hand-crafted baselines) are loaded as-is and must
     already conform to the internal shape.
     """
-    if zipfile.is_zipfile(path):
-        with zipfile.ZipFile(path) as zf:
-            reductions = json.loads(zf.read("reductions.json"))
-        # reductions is a list of scorer dicts; aggregate across samples by
-        # averaging so that multi-sample runs produce a single metric set.
-        metadata_list = reductions[0]["samples"]
-        keys = ("recall", "precision", "f1")
-        agg = {k: sum(s["metadata"][k] for s in metadata_list) / len(metadata_list)
-               for k in keys}
-        return {"results": [{"scores": [{"metadata": agg}]}]}
-    else:
+    if not zipfile.is_zipfile(path):
         return json.loads(path.read_text())
+
+    with zipfile.ZipFile(path) as zf:
+        reductions = json.loads(zf.read("reductions.json"))
+    # reductions is a list of scorer dicts; aggregate across samples by
+    # averaging so that multi-sample runs produce a single metric set.
+    samples = reductions[0]["samples"]
+    keys = ("recall", "precision", "f1")
+    agg = {k: sum(s["metadata"][k] for s in samples) / len(samples)
+           for k in keys}
+    return {"results": [{"scores": [{"metadata": agg}]}]}
 
 
 def _extract_metrics(run: dict) -> dict:
@@ -86,13 +86,18 @@ def compare_runs(
     return status, delta
 
 
+def _format_metrics(label: str, metrics: dict) -> str:
+    """Format a single metrics line for console output."""
+    return f"  {label}  recall={metrics['recall']:.2f}  precision={metrics['precision']:.2f}  f1={metrics['f1']:.2f}"
+
+
 def main():
     baseline_path = Path(sys.argv[1]) if len(sys.argv) > 1 else BASELINE_PATH
     if not baseline_path.exists():
         print(f"No baseline found at {baseline_path}. Run 'make baseline' first.")
         sys.exit(1)
 
-    # Find most recent log — Inspect AI writes *.eval (ZIP) files, not *.json
+    # Find most recent log -- Inspect AI writes *.eval (ZIP) files, not *.json
     logs = sorted(
         list(LOGS_DIR.glob("*.eval")) + list(LOGS_DIR.glob("*.json")),
         key=lambda p: p.stat().st_mtime,
@@ -115,8 +120,8 @@ def main():
     c_git = current.get("metadata", {}).get("git", "unknown")
 
     print(f"\nComparing to baseline: {baseline_path}")
-    print(f"\n  Baseline (git:{b_git}):  recall={b_metrics['recall']:.2f}  precision={b_metrics['precision']:.2f}  f1={b_metrics['f1']:.2f}")
-    print(f"  Current  (git:{c_git}):  recall={c_metrics['recall']:.2f}  precision={c_metrics['precision']:.2f}  f1={c_metrics['f1']:.2f}")
+    print(f"\n{_format_metrics(f'Baseline (git:{b_git}):', b_metrics)}")
+    print(_format_metrics(f"Current  (git:{c_git}):", c_metrics))
     print(f"\n  Delta: recall={delta['recall']:+.2f}  precision={delta['precision']:+.2f}  f1={delta['f1']:+.2f}")
     print(f"  Status: {status.value}")
 

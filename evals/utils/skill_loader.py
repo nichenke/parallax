@@ -4,12 +4,8 @@ from pathlib import Path
 
 def load_skill_content(skill_name: str, skills_root: str | None = None) -> str:
     """Load skill prompt from parallax skills directory."""
-    if skills_root is None:
-        skills_root = Path(__file__).parent.parent.parent / "skills"
-    else:
-        skills_root = Path(skills_root)
-
-    skill_path = skills_root / skill_name / "SKILL.md"
+    root = Path(__file__).parent.parent.parent / "skills" if skills_root is None else Path(skills_root)
+    skill_path = root / skill_name / "SKILL.md"
     if not skill_path.exists():
         raise FileNotFoundError(f"Skill not found: {skill_path}")
     return skill_path.read_text()

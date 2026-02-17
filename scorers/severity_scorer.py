@@ -1,6 +1,8 @@
 from difflib import SequenceMatcher
 from inspect_ai.scorer import Score, scorer, accuracy
 
+from evals.utils.output_parser import parse_review_output
+
 
 def _title_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
@@ -65,8 +67,6 @@ def severity_calibration(recall_threshold: float = 0.90, precision_threshold: fl
     Thresholds: recall >=90%, precision >=80% (provisional — tune after first runs).
     """
     async def score(state, target):
-        from evals.utils.output_parser import parse_review_output
-
         actual_findings = parse_review_output(state.output.completion, severity_filter="Critical")
         expected_findings = state.metadata.get("expected_findings", [])
 

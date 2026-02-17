@@ -45,7 +45,7 @@ def load_validated_findings(
         and (reviewer_filter is None or f.get("reviewer") == reviewer_filter)
     ]
 
-    if reviewer_filter is not None and len(real_flaws) == 0:
+    if reviewer_filter is not None and not real_flaws:
         raise ValueError(
             f"reviewer_filter={reviewer_filter!r} returned 0 findings. "
             f"Check that findings have a 'reviewer' field matching this value, "
