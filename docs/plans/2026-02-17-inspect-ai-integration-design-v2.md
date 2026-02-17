@@ -26,7 +26,7 @@ parallax/
 │   └── utils/
 │       ├── __init__.py
 │       ├── dataset_loader.py          # Updated: reviewer_filter parameter
-│       ├── output_parser.py           # Unchanged
+│       ├── output_parser.py           # Updated: fence-stripping added
 │       ├── skill_loader.py            # Unchanged
 │       └── agent_loader.py            # NEW: load agent prompts (strip frontmatter)
 ├── scorers/
@@ -55,14 +55,13 @@ Loads agent system prompt content from `agents/<name>.md`, stripping YAML frontm
 ```python
 def load_agent_content(agent_name: str) -> str:
     """Load agent system prompt, stripping YAML frontmatter."""
+    import frontmatter  # python-frontmatter library (add to pyproject.toml)
     path = agents_root / f"{agent_name}.md"
-    content = path.read_text()
-    # Strip frontmatter: content between first pair of "---" delimiters
-    if content.startswith("---"):
-        end = content.index("---", 3)
-        return content[end + 3:].strip()
-    return content
+    post = frontmatter.load(str(path))
+    return post.content.strip()
 ```
+
+**Dependency:** Add `python-frontmatter` to `pyproject.toml`. The custom `content.index("---", 3)` approach raises `ValueError` on malformed frontmatter (crashes all 5 tasks) and matches `---` horizontal rules in body text (silently truncates system prompt). `python-frontmatter` handles both edge cases natively.
 
 ### Dataset Loader — Reviewer Filter
 
@@ -82,6 +81,10 @@ def load_validated_findings(
     ]
     ...
 ```
+
+**Pre-flight check (C-5):** Before writing `reviewer_eval.py`, open `critical_findings.jsonl` and print all unique `reviewer` field values. Confirm each matches the expected agent filename (without `.md`): `assumption-hunter`, `constraint-finder`, `problem-framer`, `scope-guardian`, `success-validator`. A typo (e.g., `assumption_hunter` with underscore) causes the reviewer filter to return zero findings, producing recall = 0.0 with no error — silent failure indistinguishable from the agent missing all findings. If the field is missing from any finding, add a data migration step before proceeding.
+
+**Guard:** `reviewer_filter` that matches zero findings must raise `ValueError` listing available reviewer names, not return an empty dataset silently.
 
 **Special case: `post-review` finding**
 `v1-post-review-001` was discovered during implementation, not by any reviewer agent reviewing the requirements document. It is excluded from per-reviewer task ground truth via reviewer_filter (no agent is named "post-review"). This finding may be included in a future "implementation discovery" dataset for system-level testing.
@@ -117,18 +120,55 @@ def assumption_hunter_eval() -> Task:
 
 ## JSONL Output Alignment
 
-**Problem:** `assumption-hunter.md` specified markdown output format. All other agents specify JSONL. The scorer only parses JSONL.
+### Phase 1 Prerequisites (Audit Gate)
 
-**Fix:** Update `assumption-hunter.md` output format section to match the JSONL schema from other agents. No change to the agent's analytical content — only the output format instruction changes.
+**Before writing a single line of `reviewer_eval.py`**, complete this checklist for all 5 agents:
 
-**Required JSONL fields (all agents):**
+| Agent | JSONL native | No fences | No "Read the file" | All required fields |
+|-------|-------------|-----------|-------------------|---------------------|
+| assumption-hunter | ❌ Fix required | verify | Fix required | verify |
+| constraint-finder | verify | verify | verify | verify |
+| problem-framer | verify | verify | verify | verify |
+| scope-guardian | verify | verify | Fix required | verify |
+| success-validator | verify | verify | Fix required | verify |
+
+**Do not skip this gate.** The v1 `accuracy: 0.000` failure was caused by exactly this kind of format mismatch. Gate `make reviewer-eval` behind passing this checklist.
+
+### Output Format Fix
+
+**Problem 1 — Markdown output:** `assumption-hunter.md` specifies markdown output format. All other agents specify JSONL. The scorer only parses JSONL.
+
+**Fix:** Update `assumption-hunter.md` output format section to produce raw JSONL. No change to analytical content — only the output format instruction changes.
+
+**Problem 2 — Fence wrapping (C-2):** Claude wraps structured output in markdown code fences by default, even when instructed otherwise. A strict line-by-line JSONL parser returns zero findings for fenced-but-valid JSONL. This is an independent silent-zero path.
+
+**Fix:** Add fence-stripping to `output_parser.py` as a preprocessing step before line-by-line JSON parsing:
+```python
+def strip_fences(text: str) -> str:
+    """Strip leading/trailing markdown code fences."""
+    text = text.strip()
+    if text.startswith("```"):
+        text = text.split("\n", 1)[1] if "\n" in text else ""
+        text = text.rsplit("```", 1)[0] if "```" in text else text
+    return text.strip()
+```
+Add a test: provide fenced-but-valid JSONL, assert correct finding count. Add a distinct log message when zero findings are parsed (`"parse_result": "empty"`) to distinguish format failure from genuine zero.
+
+Also update all agent system prompts to include: _"Output raw JSONL only. Do not wrap output in markdown code fences."_
+
+**Problem 3 — Tool call instructions in body text (C-7):** `scope-guardian.md` and `success-validator.md` include "Read the design document thoroughly" as step 1 of their review process. In eval context, no tools are available — the model may attempt a tool call that fails, hallucinate a reading step, or skip it and produce fewer findings. FR-ARCH-2 acceptance criterion requires agents to contain "The design document content will be provided to you in this message."
+
+**Fix:** For all 5 agents: remove or qualify "Read the [document]" instructions. Add explicit transition language: _"The document content is provided below. You do not need to use any tools."_
+
+### Required JSONL Schema (all agents)
+
 ```json
 {
   "type": "finding",
   "id": "v1-<agent-name>-NNN",
   "title": "...",
   "severity": "Critical|Important|Minor",
-  "phase": {"primary": "...", "contributing": null},
+  "phase": {"primary": "survey|calibrate|design|plan", "contributing": null},
   "section": "...",
   "issue": "...",
   "why_it_matters": "...",
@@ -148,7 +188,7 @@ reviewer-eval:
     . $(VENV) && inspect eval evals/reviewer_eval.py \
         --model $(MODEL) \
         --log-dir $(LOG_DIR) \
-        --tags "git=$(shell git rev-parse --short HEAD)"
+        --tags "git=$(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)"
 ```
 
 `make reviewer-eval` runs all 5 per-reviewer tasks. The original `make eval` (severity_calibration.py) remains for comparison.
@@ -190,19 +230,22 @@ Ground truth must be refreshed when:
 
 ## Phase 1 Test Plan
 
-After implementation, Phase 1 is complete when:
+**Phase 1 is a smoke test.** N=1-2 findings per reviewer makes recall measurements statistically meaningless — at N=2, a single missed finding is a 50-point recall drop; at N=1, recall is binary. Quantitative thresholds (recall ≥ 0.90, precision ≥ 0.80) are Phase 2 targets, after ground truth is expanded to N≥5 per reviewer. Eval output will display a disclaimer when N<5 per reviewer.
 
-1. **Output format compliance:** `make reviewer-eval` runs without parse errors — all 5 agents produce parseable JSONL
-2. **Non-zero detection:** At least 1 reviewer task achieves recall > 0.0
-3. **Target detection:** ≥1 reviewer task achieves recall ≥ 0.90 and precision ≥ 0.80
-4. **All 5 tasks run:** No task crashes at instantiation time
-5. **Tests pass:** `make test` passes with new tests for `agent_loader`, `reviewer_filter`, and per-reviewer task instantiation
+Phase 1 is complete when:
 
-**Debugging if detection is low:**
-- Check `inspect view` for raw model output (is it JSONL or prose?)
-- Check if IDs in model output match expected IDs (exact match vs fuzzy match)
-- If fuzzy match needed: check title similarity score (threshold 0.8)
-- If IDs differ by version prefix: check that agent prompt specifies correct ID format
+1. **No crashes:** `make reviewer-eval` runs to completion — all 5 tasks instantiate and complete without exceptions
+2. **Parseable output:** All 5 agents produce at least some parseable JSONL (zero tasks return a parse error on every finding)
+3. **Basic detection:** At least 3 of 5 reviewer tasks produce recall > 0.0 (agent is detecting something)
+4. **Tests pass:** `make test` passes with new tests for `agent_loader`, `reviewer_filter`, and per-reviewer task instantiation
+
+**What Phase 1 does not validate:** Recall accuracy, precision, or prompt quality. Those are Phase 2 after ground truth expansion.
+
+**Debugging if output is empty:**
+- Check `inspect view` for raw model output (is it JSONL or fenced JSONL or prose?)
+- Confirm fence-stripping is working — paste raw output into `output_parser.py` manually
+- Confirm reviewer field values in `critical_findings.jsonl` match filter strings exactly
+- Run `make validate-dataset` to confirm per-reviewer finding counts before blaming the agent
 
 ---
 
@@ -210,7 +253,7 @@ After implementation, Phase 1 is complete when:
 
 Before Phase 2 (LLM-as-judge quality scoring):
 1. Phase 1 produces non-zero accuracy on at least one reviewer task
-2. Quality rubric defined and documented (FR-QUALITY-1)
+2. Quality rubric defined and documented (FR-QUALITY-1). Target aggregate quality score: ≥3.5/5.0 (provisional — adjust after Phase 2 baseline run)
 3. Rubric validated with ground truth examples (5/5 and 1/5 examples per dimension)
 4. Grader model selected (Haiku for cost, Sonnet for quality — start with Sonnet, optimize later)
 

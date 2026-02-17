@@ -86,7 +86,7 @@ Before implementing `reviewer_eval.py`, audit all 5 reviewer agent files against
 ```json
 {
   "type": "finding",
-  "id": "<reviewer>-<NNN>",
+  "id": "v1-<reviewer>-<NNN>",
   "title": "Brief finding title (≤80 chars)",
   "severity": "Critical|Important|Minor",
   "phase": {
