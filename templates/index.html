@@ -485,7 +485,22 @@
 
         function selectStatus(status) {
             selectedStatus = status;
-            renderFinding();
+
+            // Update button states without re-rendering entire page
+            document.querySelectorAll('.validation-btn').forEach(btn => {
+                btn.classList.remove('selected');
+            });
+
+            const btnMap = {
+                'real_flaw': '.btn-real',
+                'false_positive': '.btn-false',
+                'ambiguous': '.btn-ambiguous'
+            };
+
+            const targetBtn = document.querySelector(btnMap[status]);
+            if (targetBtn) {
+                targetBtn.classList.add('selected');
+            }
         }
 
         function formatStatus(status) {
