@@ -16,8 +16,8 @@ FINDING_C = {
 }
 
 
-def test_match_findings_exact_id():
-    """Exact ID match takes priority."""
+def test_match_findings_same_finding():
+    """Identical title + severity matches — IDs are not compared."""
     detected, consumed = match_findings(actual=[FINDING_A], expected=[FINDING_A])
     assert len(detected) == 1
     assert detected[0]["id"] == "v3-test-001"
@@ -68,6 +68,20 @@ def test_match_findings_one_actual_cannot_satisfy_two_expected():
     # One actual finding should only satisfy one expected finding
     assert len(detected) == 1
     assert consumed == {"v3-fresh-001"}
+
+
+def test_match_findings_ignores_id_differences():
+    """Matching is purely by title similarity + severity — IDs are never compared.
+
+    Finding IDs are session-local sequence numbers assigned independently each run.
+    The same flaw found in two separate runs will have different IDs but similar titles.
+    """
+    expected = {"id": "scope-guardian-004", "title": "Scope ambiguity in MVP", "severity": "Critical"}
+    actual_different_id = {"id": "scope-guardian-011", "title": "Scope ambiguity in MVP", "severity": "Critical"}
+    detected, consumed = match_findings(actual=[actual_different_id], expected=[expected])
+    assert len(detected) == 1
+    # consumed tracks the actual finding's key, not the expected ID
+    assert "scope-guardian-011" in consumed
 
 
 def test_match_findings_no_id_field_does_not_raise():

@@ -49,7 +49,7 @@ Produce JSONL findings using this structure:
 ```json
 {
   "type": "finding",
-  "id": "v1-scope-guardian-NNN",
+  "id": "scope-guardian-NNN",
   "title": "Brief finding title",
   "severity": "Critical|Important|Minor",
   "phase": {
@@ -75,7 +75,7 @@ After completing your review, add a meta-finding:
 ```json
 {
   "type": "finding",
-  "id": "v1-scope-guardian-999",
+  "id": "scope-guardian-999",
   "title": "Blind spot check: Scope Guardian perspective",
   "severity": "Minor",
   "phase": {

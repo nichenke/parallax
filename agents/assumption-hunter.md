@@ -60,7 +60,7 @@ Produce JSONL findings using this structure (one JSON object per line):
 ```json
 {
   "type": "finding",
-  "id": "v1-assumption-hunter-NNN",
+  "id": "assumption-hunter-NNN",
   "title": "Brief finding title",
   "severity": "Critical|Important|Minor",
   "phase": {
@@ -79,7 +79,7 @@ After completing your review, add a blind spot check meta-finding:
 ```json
 {
   "type": "finding",
-  "id": "v1-assumption-hunter-999",
+  "id": "assumption-hunter-999",
   "title": "Blind spot check: Assumption Hunter perspective",
   "severity": "Minor",
   "phase": {
