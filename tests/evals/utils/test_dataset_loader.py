@@ -243,3 +243,57 @@ def test_load_validated_findings_reviewer_filter_returns_subset(tmp_path):
     ids = [f["id"] for f in dataset[0].metadata["expected_findings"]]
     assert ids == ["f-001"]
     assert "f-002" not in ids
+
+
+def test_load_validated_findings_local_snapshot_resolution(tmp_path):
+    """design_doc_path with no path separator resolves to dataset directory (snapshot)."""
+    # Snapshot file lives IN the dataset directory
+    snapshot = tmp_path / "my-requirements.md"
+    snapshot.write_text("# My Requirements\n\nSnapshot content here.")
+
+    finding = {
+        "type": "finding", "id": "snap-001", "title": "T",
+        "severity": "Critical", "validation_status": "real_flaw",
+        "reviewer": "assumption-hunter"
+    }
+    metadata = {
+        "source_review": "test",
+        "design_doc_path": "my-requirements.md",  # no slash = local snapshot
+        "review_date": "2026-02-17", "validation_date": "2026-02-17",
+        "validator": "nic", "total_findings": 1,
+        "severity_distribution": {"Critical": 1, "Important": 0, "Minor": 0},
+        "false_positive_rate": 0.0, "skill_version": "v1"
+    }
+    (tmp_path / "critical_findings.jsonl").write_text(json.dumps(finding) + "\n")
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata))
+
+    dataset = load_validated_findings(str(tmp_path))
+    assert "# My Requirements" in dataset[0].input
+    assert "Snapshot content here" in dataset[0].input
+
+
+def test_load_validated_findings_repo_relative_path_still_works(tmp_path):
+    """design_doc_path containing '/' still resolves relative to repo root (legacy behavior)."""
+    # Write a doc somewhere under tmp_path that simulates a repo path
+    doc_dir = tmp_path / "docs" / "requirements"
+    doc_dir.mkdir(parents=True)
+    doc_file = doc_dir / "some-doc.md"
+    doc_file.write_text("# Legacy Doc\n\nContent.")
+
+    finding = {
+        "type": "finding", "id": "leg-001", "title": "T",
+        "severity": "Critical", "validation_status": "real_flaw",
+    }
+    metadata = {
+        "source_review": "test",
+        "design_doc_path": str(doc_file),  # absolute path — still works
+        "review_date": "2026-02-17", "validation_date": "2026-02-17",
+        "validator": "nic", "total_findings": 1,
+        "severity_distribution": {"Critical": 1, "Important": 0, "Minor": 0},
+        "false_positive_rate": 0.0, "skill_version": "v1"
+    }
+    (tmp_path / "critical_findings.jsonl").write_text(json.dumps(finding) + "\n")
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata))
+
+    dataset = load_validated_findings(str(tmp_path))
+    assert "# Legacy Doc" in dataset[0].input
