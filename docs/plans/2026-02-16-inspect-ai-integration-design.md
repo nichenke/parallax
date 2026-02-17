@@ -1,8 +1,10 @@
 # Design: Inspect AI Integration for Parallax Eval Framework
 
 **Date:** 2026-02-16
-**Status:** Approved
-**Related:** Requirements v1.1 (`docs/requirements/inspect-ai-integration-requirements-v1.md`), ADR-005
+**Status:** ~~Approved~~ **Superseded — see `2026-02-17-inspect-ai-integration-design-v2.md`**
+**Related:** Requirements v1.1 (`docs/requirements/inspect-ai-integration-requirements-v1.md`), ADR-005, ADR-006
+
+> **Deprecated:** The "single combined eval task using full skill as system prompt" architecture is superseded by per-reviewer eval tasks (ADR-006). Repository structure, dataset schema, scorer design, and Makefile patterns remain valid unless updated in v2.
 
 ---
 

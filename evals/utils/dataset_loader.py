@@ -17,22 +17,32 @@ def read_jsonl(path: Path) -> list[dict]:
     return [json.loads(line) for line in lines if line.strip()]
 
 
-def load_validated_findings(dataset_path: str) -> Dataset:
+def load_validated_findings(
+    dataset_path: str,
+    reviewer_filter: str | None = None,
+) -> Dataset:
     """Convert parallax validated JSONL findings → Inspect AI Dataset.
 
     Inspect AI Sample requires:
     - input: str | list[ChatMessage] — we use JSON string with design doc ref
     - target: str | list[str] — we use JSON-encoded list of expected finding IDs
     - metadata: dict — stores full ground truth (expected_findings, severity_distribution)
+
+    Args:
+        dataset_path: Path to dataset directory containing critical_findings.jsonl and metadata.json
+        reviewer_filter: If provided, only include findings with matching reviewer field.
+                         Use this for per-reviewer eval tasks (e.g., "assumption-hunter").
     """
     base = Path(dataset_path)
     findings = read_jsonl(base / "critical_findings.jsonl")
     metadata = json.loads((base / "metadata.json").read_text())
 
-    # Only use confirmed real flaws as ground truth
+    # Only use confirmed real flaws as ground truth, optionally filtered by reviewer
     real_flaws = [
         f for f in findings
-        if f.get("type") == "finding" and f.get("validation_status") == "real_flaw"
+        if f.get("type") == "finding"
+        and f.get("validation_status") == "real_flaw"
+        and (reviewer_filter is None or f.get("reviewer") == reviewer_filter)
     ]
 
     doc_path = Path(metadata["design_doc_path"])
