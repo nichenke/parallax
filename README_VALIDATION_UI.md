@@ -20,11 +20,11 @@ source venv/bin/activate
 python validate_findings.py
 ```
 
-The UI will start on http://localhost:5000
+The UI will start on http://localhost:8000
 
 ### 3. Open in Browser
 
-Navigate to http://localhost:5000 and start validating findings.
+Navigate to http://localhost:8000 and start validating findings.
 
 ## Usage
 
@@ -134,7 +134,7 @@ Good validation notes explain **why** you classified the finding:
 ls -la /Users/nic/src/design-parallax/parallax/docs/reviews/parallax-review-v1/findings-v3-all.jsonl
 ```
 
-**Port 5000 already in use:**
+**Port 8000 already in use:**
 ```bash
 # Edit validate_findings.py and change the port number
 app.run(debug=True, port=5001)  # Use different port

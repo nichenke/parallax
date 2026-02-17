@@ -35,16 +35,16 @@
    Loading findings from: .../findings-v3-all.jsonl
    Output will be saved to: datasets/v3_review_validated/critical_findings.jsonl
 
-   Starting validation UI on http://localhost:5000
+   Starting validation UI on http://localhost:8000
    Press Ctrl+C to stop
 
    * Serving Flask app 'validate_findings'
    * Debug mode: on
-   * Running on http://127.0.0.1:5000
+   * Running on http://127.0.0.1:8000
    ```
 
 3. **Open Browser:**
-   - Navigate to http://localhost:5000
+   - Navigate to http://localhost:8000
    - Should see: "🔍 Parallax Finding Validator"
    - Progress: "Finding 1 of 28 Critical findings"
 

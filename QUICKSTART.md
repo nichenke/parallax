@@ -6,7 +6,7 @@
 ./start.sh
 ```
 
-Then open http://localhost:5000
+Then open http://localhost:8000
 
 ## Manual Launch
 

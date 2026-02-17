@@ -188,7 +188,7 @@ def get_summary():
 if __name__ == '__main__':
     print(f"Loading findings from: {INPUT_FILE}")
     print(f"Output will be saved to: {OUTPUT_FILE}")
-    print("\nStarting validation UI on http://localhost:5000")
+    print("\nStarting validation UI on http://localhost:8000")
     print("Press Ctrl+C to stop\n")
 
-    app.run(debug=True, port=5000)
+    app.run(debug=True, port=8000)

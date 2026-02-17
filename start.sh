@@ -19,7 +19,7 @@ if ! python -c "import flask" 2>/dev/null; then
 fi
 
 # Start the app
-echo "Starting UI on http://localhost:5000"
+echo "Starting UI on http://localhost:8000"
 echo "Press Ctrl+C to stop"
 echo ""
 python validate_findings.py
