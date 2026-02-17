@@ -28,6 +28,13 @@ eval:
 	    --log-dir $(LOG_DIR) \
 	    --tags "git=$(shell git rev-parse --short HEAD)"
 
+reviewer-eval:
+	mkdir -p $(LOG_DIR)
+	. $(VENV) && inspect eval evals/reviewer_eval.py \
+	    --model $(MODEL) \
+	    --log-dir $(LOG_DIR) \
+	    --tags "git=$(shell git rev-parse --short HEAD 2>/dev/null || echo 'unknown')"
+
 ablation:
 	mkdir -p $(LOG_DIR)
 	. $(VENV) && inspect eval evals/ablation_tests.py \
@@ -63,6 +70,7 @@ help:
 	@echo ""
 	@echo "Eval loop:"
 	@echo "  make eval        Run severity calibration eval"
+	@echo "  make reviewer-eval Run per-reviewer eval tasks (5 tasks)"
 	@echo "  make ablation    Run ablation tests"
 	@echo "  make baseline    Store latest run as baseline"
 	@echo "  make regression  Compare latest run to baseline"
@@ -73,4 +81,4 @@ help:
 	@echo "  make test        Run unit tests"
 	@echo "  make setup       Create venv and install dependencies"
 
-.PHONY: setup review validate eval ablation baseline regression view cycle test help
+.PHONY: setup review validate eval reviewer-eval ablation baseline regression view cycle test help
