@@ -1,6 +1,6 @@
 {
   "source_review": "inspect-ai-integration-v2-requirements-light",
-  "design_doc_path": "docs/requirements/inspect-ai-integration-requirements-v2.md",
+  "design_doc_path": "inspect-ai-integration-requirements-v2.md",
   "design_doc_branch": "feat/inspect-ai-integration-design",
   "design_doc_hash": "e0930d4615ef53b7ca32468ac30cf5608398e6790ef4ce8da2df162967721e90",
   "review_date": "2026-02-17",

@@ -1,7 +1,7 @@
 {
   "source_review": "inspect-ai-integration-requirements-light",
-  "design_doc_path": "docs/requirements/inspect-ai-integration-requirements-v2.md",
-  "design_doc_hash": "PLACEHOLDER",
+  "design_doc_path": "inspect-ai-integration-requirements-v1.md",
+  "design_doc_hash": "4fa1356ead5b1757406eac3b10d7d70b511898df70eac11aaddf836761869316",
   "review_date": "2026-02-16",
   "validation_date": "2026-02-17",
   "validator": "nic",

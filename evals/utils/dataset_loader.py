@@ -52,9 +52,16 @@ def load_validated_findings(
             f"and that matched findings have validation_status='real_flaw'."
         )
 
-    doc_path = Path(metadata["design_doc_path"])
-    if not doc_path.is_absolute():
+    doc_path_str = metadata["design_doc_path"]
+    doc_path = Path(doc_path_str)
+    if doc_path.is_absolute():
+        pass  # use as-is
+    elif "/" in doc_path_str or "\\" in doc_path_str:
+        # repo-relative path (legacy) — resolve from repo root
         doc_path = Path(__file__).parent.parent.parent / doc_path
+    else:
+        # bare filename — resolve against dataset directory (frozen snapshot)
+        doc_path = base / doc_path
     doc_content = doc_path.read_text()
 
     sample = Sample(
