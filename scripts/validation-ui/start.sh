@@ -1,5 +1,6 @@
 #!/bin/bash
 # Quick start script for validation UI
+cd "$(dirname "$0")"
 
 echo "🔍 Starting Parallax Finding Validator..."
 echo ""
