@@ -43,9 +43,11 @@ def test_load_validated_findings_returns_dataset(tmp_path):
             "validation_date": "2026-02-16"
         }
     ]
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Test doc")
     metadata = {
         "source_review": "parallax-review-v1",
-        "design_doc_path": "docs/plans/parallax-design-v4.md",
+        "design_doc_path": str(doc),
         "design_doc_hash": "abc123",
         "review_date": "2026-02-16",
         "validation_date": "2026-02-16",
@@ -84,9 +86,11 @@ def test_load_validated_findings_sample_structure(tmp_path):
         "validator_id": "nic",
         "validation_date": "2026-02-16"
     }
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Test requirements doc\n\nSome requirements here.")
     metadata = {
         "source_review": "test",
-        "design_doc_path": "docs/test.md",
+        "design_doc_path": str(doc),
         "design_doc_hash": "abc",
         "review_date": "2026-02-16",
         "validation_date": "2026-02-16",
@@ -103,12 +107,36 @@ def test_load_validated_findings_sample_structure(tmp_path):
     dataset = load_validated_findings(str(tmp_path))
     sample = dataset[0]
 
-    # input is a JSON string with design doc reference
-    assert "design_doc" in sample.input
+    # input is the document content, not a path reference
+    assert "# Test requirements doc" in sample.input
     # ground truth is in metadata (Inspect AI target must be str | list[str])
     assert "expected_findings" in sample.metadata
     assert len(sample.metadata["expected_findings"]) == 1
     assert sample.metadata["expected_findings"][0]["id"] == "v3-assumption-hunter-001"
+
+
+def test_load_validated_findings_input_is_document_content(tmp_path):
+    """Sample input must be document content, not a path — model has no file tools in eval context."""
+    doc = tmp_path / "requirements.md"
+    doc.write_text("# My Requirements\n\nSome content here.")
+    finding = {
+        "type": "finding", "id": "test-001", "title": "Test",
+        "severity": "Critical", "validation_status": "real_flaw",
+        "reviewer": "test"
+    }
+    metadata = {
+        "source_review": "test", "design_doc_path": str(doc),
+        "review_date": "2026-02-17", "validation_date": "2026-02-17",
+        "validator": "nic", "total_findings": 1,
+        "severity_distribution": {"Critical": 1, "Important": 0, "Minor": 0},
+        "false_positive_rate": 0.0, "skill_version": "v1"
+    }
+    (tmp_path / "critical_findings.jsonl").write_text(json.dumps(finding) + "\n")
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata))
+
+    dataset = load_validated_findings(str(tmp_path))
+    assert "# My Requirements" in dataset[0].input
+    assert "Some content here" in dataset[0].input
 
 
 def test_real_ground_truth_loads_correctly():
@@ -138,8 +166,10 @@ def test_load_validated_findings_filters_non_real_flaws(tmp_path):
             "validation_notes": "N", "validator_id": "nic", "validation_date": "2026-02-16"
         }
     ]
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Doc")
     metadata = {
-        "source_review": "test", "design_doc_path": "d", "design_doc_hash": "h",
+        "source_review": "test", "design_doc_path": str(doc), "design_doc_hash": "h",
         "review_date": "2026-02-16", "validation_date": "2026-02-16",
         "validator": "nic", "total_findings": 2,
         "severity_distribution": {"Critical": 2, "Important": 0, "Minor": 0},

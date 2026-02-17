@@ -35,11 +35,13 @@ def load_validated_findings(dataset_path: str) -> Dataset:
         if f.get("type") == "finding" and f.get("validation_status") == "real_flaw"
     ]
 
+    doc_path = Path(metadata["design_doc_path"])
+    if not doc_path.is_absolute():
+        doc_path = Path(__file__).parent.parent.parent / doc_path
+    doc_content = doc_path.read_text()
+
     sample = Sample(
-        input=json.dumps({
-            "design_doc": metadata["design_doc_path"],
-            "skill_version": metadata.get("skill_version", "current")
-        }),
+        input=doc_content,
         target=[f["id"] for f in real_flaws],
         metadata={
             **metadata,
