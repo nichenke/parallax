@@ -7,11 +7,11 @@ from evals.utils.skill_loader import load_skill_content, drop_section
 from scorers.severity_scorer import severity_calibration
 
 
-DATASET_PATH = Path(__file__).parent.parent / "datasets" / "v3_review_validated"
+DATASET_PATH = Path(__file__).parent.parent / "datasets" / "inspect-ai-integration-requirements-v2"
 
 
 def _ablated_task(section_to_drop: str, task_name: str) -> Task:
-    skill = load_skill_content("parallax:requirements")
+    skill = load_skill_content("requirements")
     ablated = drop_section(skill, section_to_drop)
     return Task(
         dataset=load_validated_findings(DATASET_PATH),
