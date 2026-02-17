@@ -577,6 +577,7 @@
             const filtered = getFilteredFindings();
             if (currentIndex < filtered.length - 1) {
                 currentIndex++;
+                selectedStatus = null;
                 renderFinding();
             }
         }
@@ -584,6 +585,7 @@
         function previousFinding() {
             if (currentIndex > 0) {
                 currentIndex--;
+                selectedStatus = null;
                 renderFinding();
             }
         }
@@ -595,6 +597,7 @@
 
             if (targetIndex >= 0 && targetIndex < filtered.length) {
                 currentIndex = targetIndex;
+                selectedStatus = null;
                 renderFinding();
             }
         }
