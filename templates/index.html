@@ -148,7 +148,7 @@
 
         .validation-buttons {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
+            grid-template-columns: repeat(2, 1fr);
             gap: 12px;
             margin-bottom: 20px;
         }
@@ -194,6 +194,9 @@
 
         .btn-ambiguous { border-color: #ffc107; }
         .btn-ambiguous.selected { background: #fff3cd; border-color: #ffc107; }
+
+        .btn-duplicate { border-color: #6c757d; }
+        .btn-duplicate.selected { background: #e2e3e5; border-color: #6c757d; }
 
         textarea {
             width: 100%;
@@ -329,7 +332,7 @@
                 </div>
             </div>
             <div class="keyboard-help">
-                ⌨️ Keyboard shortcuts: <kbd>1</kbd> Real Flaw • <kbd>2</kbd> False Positive • <kbd>3</kbd> Ambiguous • <kbd>→</kbd> Next • <kbd>←</kbd> Previous • <kbd>S</kbd> Save
+                ⌨️ Keyboard shortcuts: <kbd>1</kbd> Real Flaw • <kbd>2</kbd> False Positive • <kbd>3</kbd> Ambiguous • <kbd>4</kbd> Duplicate • <kbd>→</kbd> Next • <kbd>←</kbd> Previous • <kbd>S</kbd> Save
             </div>
         </header>
 
@@ -444,6 +447,11 @@
                                 <kbd>3</kbd>
                                 ~ Ambiguous
                             </button>
+                            <button class="validation-btn btn-duplicate ${selectedStatus === 'duplicate' ? 'selected' : ''}"
+                                    onclick="selectStatus('duplicate')">
+                                <kbd>4</kbd>
+                                ⚬ Duplicate
+                            </button>
                         </div>
 
                         <div class="section">
@@ -494,7 +502,8 @@
             const btnMap = {
                 'real_flaw': '.btn-real',
                 'false_positive': '.btn-false',
-                'ambiguous': '.btn-ambiguous'
+                'ambiguous': '.btn-ambiguous',
+                'duplicate': '.btn-duplicate'
             };
 
             const targetBtn = document.querySelector(btnMap[status]);
@@ -507,7 +516,8 @@
             const map = {
                 'real_flaw': 'Real Flaw',
                 'false_positive': 'False Positive',
-                'ambiguous': 'Ambiguous'
+                'ambiguous': 'Ambiguous',
+                'duplicate': 'Duplicate'
             };
             return map[status] || status;
         }
@@ -604,7 +614,7 @@
                 if (data.success) {
                     const s = data.summary;
                     document.getElementById('summary-text').textContent =
-                        `✓ ${s.real_flaw} Real | ✗ ${s.false_positive} False Positive | ~ ${s.ambiguous} Ambiguous | ${s.remaining} Remaining`;
+                        `✓ ${s.real_flaw} Real | ✗ ${s.false_positive} False Positive | ~ ${s.ambiguous} Ambiguous | ⚬ ${s.duplicate} Duplicate | ${s.remaining} Remaining`;
                 }
             } catch (error) {
                 console.error('Failed to update summary:', error);
@@ -625,6 +635,8 @@
                     selectStatus('false_positive');
                 } else if (e.key === '3') {
                     selectStatus('ambiguous');
+                } else if (e.key === '4') {
+                    selectStatus('duplicate');
                 } else if (e.key === 'ArrowRight') {
                     e.preventDefault();
                     nextFinding();

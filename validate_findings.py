@@ -161,6 +161,7 @@ def get_summary():
             'real_flaw': 0,
             'false_positive': 0,
             'ambiguous': 0,
+            'duplicate': 0,
             'total_validated': len(validated)
         }
 
