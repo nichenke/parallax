@@ -1,9 +1,11 @@
 # Requirements: Inspect AI Integration for Parallax Eval Framework
 
 **Date:** 2026-02-16
-**Status:** Draft v1.0 (Post-Brainstorm)
+**Status:** ~~Draft v1.0 (Post-Brainstorm)~~ **Superseded by v2 — see `inspect-ai-integration-requirements-v2.md`**
 **Scope:** Eval framework integration for systematic skill validation
-**Related:** Issue #5 (Eval Framework), ADR-005 (Inspect AI Integration Decision)
+**Related:** Issue #5 (Eval Framework), ADR-005 (Inspect AI Integration Decision), ADR-006 (per-reviewer decomposition)
+
+> **Deprecated:** FR2.1 (single combined task using full skill as system message) superseded by FR-ARCH-1 (per-reviewer task decomposition). All other requirements remain valid unless explicitly superseded in v2.
 
 ---
 

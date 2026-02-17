@@ -437,6 +437,42 @@ Revisit if parallax adds:
 - **Addy Osmani analysis:** https://addyosmani.com/blog/claude-code-agent-teams/
 - **Gist guide:** https://gist.github.com/kieranklaassen/4f2aba89594a4aea4ad64d753984b2ea
 
+### inspect_swe + Agent Bridge (Claude Code / Codex CLI as Inspect Solvers)
+- **Agent bridge docs:** https://inspect.aisi.org.uk/agent-bridge.html
+- **inspect_swe claude_code:** https://meridianlabs-ai.github.io/inspect_swe/claude_code.html
+- **inspect_swe codex_cli:** https://meridianlabs-ai.github.io/inspect_swe/codex_cli.html
+- **PyPI package:** https://pypi.org/project/inspect-swe/
+- **GitHub:** https://github.com/meridianlabs-ai/inspect_swe
+
+#### What It Is
+`inspect_swe` (by J.J. Allaire — original Inspect AI author, now at Meridian Labs) provides drop-in `claude_code()` and `codex_cli()` solvers. They run the actual CLI binaries inside a Docker sandbox, routing all API calls through a localhost proxy back to Inspect's configured model provider.
+
+#### Key Insight: No Separate API Key Needed
+The sandbox_agent_bridge runs a proxy inside the container. Claude Code/Codex CLI set `ANTHROPIC_BASE_URL=http://localhost:{bridge.port}`. Every API call hits the proxy → forwarded to Inspect's host-side model provider (your existing key). The sandbox never needs credentials. This means:
+- No `ANTHROPIC_API_KEY` inside Docker
+- No `claude login` inside the sandbox
+- The model Inspect is configured with is what runs — not a separate account
+
+#### Maintenance Status (checked 2026-02-16)
+- v0.2.34 released Feb 11, 2026 — actively maintained (~1 release/week)
+- 34 releases since Aug 2025
+- MIT, 8 contributors, 13 stars (niche tooling, expected)
+- Not official AISI — Meridian Labs is a separate company
+
+#### Risk Profile
+- **Low risk for optional use:** Don't make it a hard dependency
+- **Requires Docker** — local dev fine, adds CI friction
+- **Thin community** — 13 stars, minimal external bug catching
+- **Recommended pattern:** Phase 2 optional path (`make eval-claude-code`), not in critical eval loop
+
+#### TODO: Full Ecosystem Test
+Deferred — needs live test of:
+1. `pip install inspect-swe`
+2. Minimal Docker sandbox + `claude_code()` solver
+3. Confirm proxy auth works (no separate key needed)
+4. Run actual `parallax:requirements` skill invocation via Claude Code in sandbox
+5. Verify transcript captures, costs tracked correctly
+
 ### Cost & Pricing
 - **Claude pricing guide:** https://www.nops.io/blog/anthropic-api-pricing/
 - **Batch API savings:** https://www.aifreeapi.com/en/posts/claude-opus-4-pricing

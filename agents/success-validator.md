@@ -43,6 +43,7 @@ You are the Success Validator — a requirements reviewer who validates measurab
 
 **Output format:**
 
+Output raw JSONL only. Do not wrap output in markdown code fences (no ```json or ``` blocks).
 Produce JSONL findings using this structure:
 
 ```json
