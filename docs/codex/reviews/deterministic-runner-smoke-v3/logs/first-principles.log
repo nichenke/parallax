@@ -1,0 +1,1010 @@
+OpenAI Codex v0.101.0 (research preview)
+--------
+workdir: /Users/nic/src/design-parallax/parallax
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: auto
+session id: 019c64b3-8a96-7722-9213-bd33c21102f3
+--------
+user
+You are executing reviewer lane: first-principles for parallax:review.
+Follow these agent instructions exactly.
+
+
+You are the First Principles Challenger — an adversarial design reviewer who strips away inherited assumptions and asks whether the problem framing itself is right.
+
+**Your core question:** "Are we solving the right problem? Would we design it this way if we started from zero?"
+
+**Your focus areas:**
+- Problem framing: is the stated problem the real problem, or a symptom?
+- Inherited constraints: are we carrying forward limitations from previous systems that no longer apply?
+- Solution bias: did the design start from a solution and work backwards to justify it?
+- Scope questioning: should this be bigger? Smaller? Different?
+- Alternative framings: what if we defined the problem differently — would a better design emerge?
+- Core vs accidental complexity: which parts of the design are essential to the problem and which are artifacts of the chosen approach?
+
+**Voice rules:**
+- Active voice. Lead with impact, then evidence.
+- No hedging ("might", "could", "possibly"). State findings directly.
+- Quantify blast radius where possible.
+- SRE-style framing: what's the failure mode, what's the blast radius, what's the mitigation.
+
+**Review process:**
+0. Before evaluating any element, ask: "Should this exist at all?" Never optimize or critique something that should be deleted entirely.
+1. Read the requirements document — understand the stated problem
+2. Ask: "Why does this problem exist? What's the root cause?"
+3. Ask: "If we had no existing system, no legacy, no prior decisions — how would we solve this?"
+4. Read the design document — compare it to your first-principles answer
+5. Identify where the design is shaped by precedent rather than necessity
+6. Check: "Is the design solving the problem, or is it solving a nearby problem that's easier?"
+
+**Output format:**
+
+Write your findings as structured markdown:
+
+```
+# First Principles Review
+
+## Problem Reframe
+[In 2-3 sentences: how would you state the core problem if you started from scratch? Does this differ from the design's framing?]
+
+## Findings
+
+### Finding N: [Title]
+- **Severity:** Critical | Important | Minor
+- **Phase:** [primary phase] (primary), [contributing phase] (contributing, if applicable)
+- **Section:** [which part of the design]
+- **Issue:** [what first-principles concern was found]
+- **Why it matters:** [how this affects whether we're solving the right problem]
+- **Suggestion:** [alternative framing or approach]
+
+## Blind Spot Check (optional — being empirically validated)
+[What might I have missed given my focus on fundamentals? What practical concerns would other reviewers catch?]
+```
+
+**Severity guidelines:**
+- **Critical:** The design is solving the wrong problem or a symptom instead of the root cause.
+- **Important:** A significant design choice is driven by precedent rather than necessity, and a better alternative exists.
+- **Minor:** An inherited assumption that's probably fine but worth questioning.
+
+**Phase classification (assign primary, optionally note contributing):**
+- **survey:** The problem itself needs more investigation
+- **calibrate:** The requirements are framing the wrong problem
+- **design:** The design solves the right problem but carries unnecessary inherited constraints
+- **plan:** Implementation approach is shaped by precedent when it shouldn't be
+
+**Important:** This is the hardest review to do well. It's easy to be contrarian without being constructive. Every "you're solving the wrong problem" must come with "here's a better framing." If the problem framing is genuinely good, say so — don't manufacture objections.
+
+Task:
+- Stage: design
+- Topic label: deterministic-runner-smoke-v3
+- Design artifact path: /Users/nic/src/design-parallax/parallax/docs/codex/plans/2026-02-16-deterministic-runner-design.md
+- Requirements artifact path: /Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-requirements.md
+- Supplemental context paths:
+  - /Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-options.md
+  - /Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-recommendation.md
+  - /Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-plan.md
+- Review the design against requirements and supplemental context.
+- Write findings in the exact output format mandated above.
+- Output markdown only. Do not use code fences.
+
+Artifact text begins below.
+
+### DESIGN ARTIFACT (/Users/nic/src/design-parallax/parallax/docs/codex/plans/2026-02-16-deterministic-runner-design.md)
+# Design: Deterministic Cross-Runtime Review Runner
+
+**Date:** 2026-02-16  
+**Status:** Proposed (updated after smoke review dispositions)  
+**Scope:** `parallax:review` design-stage runner only
+
+## Overview
+
+Build a local deterministic runner that executes the existing review workflow with explicit state, replayable artifacts, and bounded failure handling across Codex and Claude runtimes.
+
+For this increment, markdown remains canonical (`summary.md` + reviewer markdown files) for human and semantic comparison. Structured canonical JSON/JSONL (`summary.json`, `findings.jsonl`) is deferred until Codex workflow + telemetry are in place.
+
+## Inputs
+
+- Design artifact path (markdown)
+- Requirements artifact path (markdown)
+- Stage (`design`, default)
+- Topic label
+- Runtime (`codex` or `claude`)
+- Runner config (reviewer order, mandatory/optional set, retry policy)
+
+## Outputs
+
+For each run:
+
+`docs/codex/reviews/<topic>/runs/<run_id>/`
+
+- `run_manifest.json`
+- `run_state.json`
+- `events.jsonl`
+- `reviewer_outcomes.jsonl`
+- Reviewer markdown outputs (`assumption-hunter.md`, ...)
+- `summary.md` (canonical summary artifact for this increment)
+
+Deferred outputs (future increment):
+- `summary.json`
+- `findings.jsonl`
+
+## Architecture
+
+### Runner Core
+
+Single script entrypoint with subcommands:
+
+- `plan`: validate inputs, snapshot hashes, compute deterministic IDs, write manifest
+- `run`: execute reviewers + synthesizer with state/event logging
+- `resume --run-id <id>`: continue `pending|retryable|manual_handoff` work only
+
+Run collision policy:
+- If `docs/codex/reviews/<topic>/runs/<run_id>/` already exists, fail fast by default.
+- Replays require explicit `--replay-attempt <n>` and write to `.../runs/<run_id>/replays/<n>/`.
+- Operators should commit review outputs to git between runs when artifact history must be preserved.
+
+### Adapter Layer
+
+Adapter contract:
+
+`run_reviewer(reviewer_name, manifest, attempt, timeout_s) -> ReviewerOutcome`
+
+Adapters:
+- `claude_adapter`
+- `codex_adapter`
+- `codex_app_handoff_adapter` (development fallback for GUI-only flow)
+
+Handoff policy:
+- GUI handoff remains supported during development.
+- Goal is to close GUI/CLI drift with prompt generation/runtime alignment, not maintain separate long-term comparability models.
+- Handoff ingest must validate schema + hashes before state advancement.
+
+### Config Layer
+
+`config/review_runner.yaml` defines:
+- canonical reviewer order
+- mandatory vs optional reviewers
+- per-reviewer timeout/retry overrides
+- runtime defaults (`effort`, `temperature`) read from agent frontmatter hints
+- retry backoff profile (base delay, jitter, max attempts)
+
+## Determinism Controls
+
+- `run_id` generated from canonical manifest hash (exclude wall-clock timestamps).
+- `content_fingerprint` generated from canonicalized content inputs only (topic-agnostic).
+- Stable reviewer dispatch order from config.
+- Stable JSON serialization (sorted keys, normalized newlines).
+- Prompt/input hashing stored in manifest for replayability.
+- Effective runtime settings captured per reviewer attempt (`effective_runtime_settings`).
+- Deterministic summary rendering order:
+  - severity (`Critical`, `Important`, `Minor`)
+  - phase (`survey`, `calibrate`, `design`, `plan`)
+  - reviewer canonical order
+
+## Failure Semantics
+
+### Reviewer-Level
+
+- `pending`
+- `running`
+- `succeeded`
+- `failed_transient`
+- `failed_timeout`
+- `failed_fatal`
+- `skipped_capability` (example: no web for `prior-art-scout`)
+- `manual_handoff`
+
+### Retry Policy
+
+- Default attempts: 2 total (1 retry) for transient failures.
+- Retry uses bounded exponential backoff with jitter:
+  - attempt 2 delay: `base_delay_ms * 2^(attempt-2) + jitter_ms`
+  - default `base_delay_ms = 2000`, `jitter_ms = 0..500`
+- No retry for `skipped_capability` or `failed_fatal`.
+
+### Run-Level Terminal States
+
+- `created`
+- `running`
+- `waiting_for_handoff`
+- `success`
+- `partial_success`
+- `failed`
+
+### State Transition Rules
+
+Run transitions:
+- `created -> running` on `run_started`
+- `running -> waiting_for_handoff` on reviewer terminal `manual_handoff`
+- `waiting_for_handoff -> running` on valid handoff ingest
+- `running -> success` when all mandatory reviewers succeed and synthesizer succeeds
+- `running -> partial_success` when mandatory reviewers succeed, optional reviewer is skipped/failed, and synthesizer succeeds
+- `running -> failed` when mandatory quorum is not met or synthesizer fails
+
+Reviewer transitions:
+- `pending -> running` on dispatch
+- `running -> succeeded | failed_transient | failed_timeout | failed_fatal | skipped_capability | manual_handoff`
+- `failed_transient -> running` on retry schedule (attempt < max)
+- `manual_handoff -> succeeded | failed_fatal` after ingest validation
+
+### Atomic Synthesis
+
+- Write synthesis output to temporary paths (`summary.md.tmp`).
+- Validate content and state marker.
+- Atomically rename to final path.
+- Persist synthesis checkpoint info in `run_state.json` before terminal run status.
+
+## Partial Failure Policy
+
+Design-stage mandatory reviewers:
+- assumption-hunter
+- edge-case-prober
+- requirement-auditor
+- feasibility-skeptic
+- first-principles
+
+Optional reviewer:
+- prior-art-scout
+
+If optional reviewer fails or is capability-skipped:
+- run remains valid but is marked PARTIAL in `summary.md`
+- summary includes confidence downgrade note for prior-art coverage
+- if the same topic has 2 consecutive prior-art capability skips, add an escalation note to revisit calibrate-phase build-vs-buy assumptions
+
+Capability preflight:
+- runner performs capability probe before dispatch (for web-dependent reviewers)
+- when capability is unavailable, log explicit reason and remediation path in events + summary metadata
+
+## Data Model (Minimal)
+
+### run_manifest.json
+
+- `run_id`
+- `content_fingerprint`
+- `created_at`
+- `stage`
+- `topic`
+- `runtime`
+- `inputs` (paths + content hashes)
+- `agent_prompt_hashes`
+- `config_hash`
+- `reviewer_plan` (ordered list, mandatory flags, policy snapshot)
+- `retry_policy`
+- `manifest_schema_version`
+
+### run_state.json
+
+- `run_status`
+- `run_transition_version`
+- `reviewers` map:
+  - `status`
+  - `attempts`
+  - `last_error_class`
+  - `output_path`
+  - `effective_runtime_settings`
+  - `last_retry_delay_ms`
+- `synthesizer_status`
+- `synthesis_checkpoint`
+
+### reviewer_outcomes.jsonl
+
+One line per attempt:
+- `run_id`
+- `content_fingerprint`
+- `reviewer`
+- `attempt`
+- `status`
+- `error_class`
+- `duration_ms`
+- `retry_delay_ms`
+- `effective_runtime_settings`
+- `artifact_hash`
+
+## Testing Strategy
+
+1. Determinism tests:
+   - identical inputs => identical `run_id`, `content_fingerprint`, and run plan
+2. Replay collision tests:
+   - existing `run_id` path fails without `--replay-attempt`
+3. Resume tests:
+   - interrupted run resumes without rerunning completed reviewers
+4. State-machine tests:
+   - invalid transitions are rejected
+5. Partial failure tests:
+   - `prior-art-scout` capability skip => `partial_success` + confidence downgrade marker
+   - repeated skip threshold (2 consecutive runs on same topic) => escalation note
+6. Retry tests:
+   - transient failures use bounded backoff+jitter and stop at max attempts
+7. Synthesis atomicity tests:
+   - interrupted synthesis never publishes stale/partial final `summary.md`
+8. Cross-runtime contract tests:
+   - same manifest through `codex` and `claude` preserves schema and semantic comparison metadata
+
+## Migration Strategy
+
+Phase 1 (this design): local deterministic runner, markdown-canonical outputs, semantic comparison metadata.  
+Phase 2: add canonical structured outputs (`summary.json`, `findings.jsonl`) once Codex workflow + telemetry are ready.  
+Phase 3: optional LangGraph wrapper around the same state model and artifacts.
+
+LangGraph adoption gate:
+- move when we automate 2+ stages and need durable multi-stage pause/resume/branching beyond local script complexity.
+
+## Open Questions
+
+1. What exact readiness criteria switch canonical output from markdown-only to JSON/JSONL (telemetry coverage, parser confidence, eval maturity)?
+2. Do we require runtime-level seed support for stronger repeatability, or treat process determinism as sufficient for v1?
+3. What test protocol will prove GUI vs CLI output drift (or confirm parity) after prompt generator/runtime alignment work?
+
+### REQUIREMENTS ARTIFACT (/Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-requirements.md)
+# Deterministic Runner Requirements
+
+**Date:** 2026-02-16  
+**Status:** Updated after smoke-review dispositions for `deterministic-runner-smoke-v2`
+
+## Problem
+
+Current review orchestration is useful but not deterministic enough for reproducible evals across Codex and Claude runtimes. Partial failures (especially web-dependent reviewer behavior) need explicit, replayable semantics.
+
+## Goal
+
+Define requirements for a design-stage runner that executes review workflows reliably, captures deterministic run state, and supports resume/replay without changing core reviewer behavior.
+
+## In Scope
+
+- `parallax:review` design stage only
+- Cross-runtime execution support (Codex CLI, Codex GUI handoff flow, Claude Code)
+- Deterministic run identity, ordering, and artifact layout
+- Explicit partial-failure handling (including no-web cases)
+- Markdown-first semantic comparison for this increment
+
+## Out of Scope
+
+- Immediate implementation of `survey`, `calibrate`, `plan`, `orchestrate`, or `eval` stages
+- Replacing reviewer prompts with a new review methodology
+- Full LangGraph adoption in this increment
+- Fully deterministic LLM text output across providers
+
+## Constraints
+
+- Keep existing reviewer/synthesizer prompts and design-stage semantics intact.
+- Preserve markdown outputs for human review.
+- Prefer incremental changes over a big-bang rewrite.
+
+## MoSCoW
+
+### Must Have
+
+- Deterministic `run_id` from canonical run manifest.
+- Topic-agnostic `content_fingerprint` for same-content cross-topic replay analysis.
+- Snapshot hashes for all run-critical inputs (design, requirements, agent prompts, config).
+- Explicit state machine for run + reviewer outcomes, with transition guards.
+- Structured event/outcome logs (`events.jsonl`, `reviewer_outcomes.jsonl`).
+- `reviewer_outcomes.jsonl` records effective runtime settings per attempt.
+- Resume mode that does not rerun completed reviewers.
+- Atomic summary publish behavior (no stale/partial final `summary.md` on interruption).
+- Partial-run semantics with explicit statuses for:
+  - `success`
+  - `partial_success`
+  - `failed`
+- Default policy for no-web reviewer capability:
+  - mark `prior-art-scout` as capability-skipped (not silent failure)
+  - include explicit confidence downgrade in summary output
+- Bounded transient retry policy with backoff + jitter.
+- Run output collision policy (fail fast or explicit replay-attempt path) to avoid artifact clobbering.
+
+### Should Have
+
+- Runtime adapter abstraction (`claude`, `codex`) under one runner command.
+- Semantic comparison metadata section in `summary.md` that captures non-finding context (reviewer completion map, capability constraints, runtime caveats).
+- Consecutive prior-art capability skips (same topic) trigger explicit escalation note.
+
+### Could Have
+
+- Canonical `summary.json` and `findings.jsonl` once Codex workflow + telemetry are in place.
+- Run comparison utility separating orchestration drift from model-content drift.
+- Manual handoff adapter for Codex App GUI-only execution path.
+- Per-reviewer override policy (timeouts/retries/model hints) in config.
+
+### Won't Have (This Iteration)
+
+- Full multi-stage orchestration framework migration (LangGraph).
+- Advanced evaluator/judge automation for finding quality scoring.
+- JSON/JSONL as canonical outputs in this increment.
+
+## Non-Functional Requirements
+
+- Reproducibility:
+  - identical manifest inputs produce identical run plan and artifact ordering
+  - identical content inputs produce identical `content_fingerprint`
+- Reliability:
+  - transient failures use bounded retries with backoff+jitter
+  - deterministic handling for non-retryable capability failures
+- Observability:
+  - each reviewer attempt and terminal outcome is logged with timestamps + error class
+  - effective runtime settings are logged per attempt
+- Portability:
+  - same runner contract works across Codex and Claude adapters
+- Comparability:
+  - for this increment, semantic comparison is driven by `summary.md` plus semantic metadata
+
+## Acceptance Criteria
+
+1. Two runs with identical inputs produce the same `run_id` and same reviewer execution plan.
+2. Two runs with identical content but different topic labels produce the same `content_fingerprint`.
+3. If a run is interrupted mid-review, resume completes without rerunning already-completed reviewers.
+4. If synthesis is interrupted, final `summary.md` is either valid/final or absent (never partial/stale).
+5. If `prior-art-scout` has no web access, run completes with `partial_success` (assuming mandatory reviewers succeeded), summary includes explicit PARTIAL marker, and confidence downgrade note.
+6. If prior-art capability is skipped in 2 consecutive runs for the same topic, the summary adds an escalation note.
+7. Reviewer outcome records include effective runtime settings and retry timing metadata.
+8. Existing design-stage review outputs remain human-readable and compatible with current workflow expectations.
+
+### SUPPLEMENTAL CONTEXT (/Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-options.md)
+# Deterministic Cross-Runtime Runner Options
+
+**Date:** 2026-02-16  
+**Scope:** `parallax:review` design-stage runner only (keep current reviewer behavior intact)
+
+## Decision Frame
+
+We need deterministic execution across runtimes (Codex/Claude), explicit partial-failure handling, and replayable artifacts without a big-bang rewrite.
+
+Evaluation criteria:
+- Reliability under partial failures (timeouts, no-web, transient API errors)
+- Reproducibility for eval comparisons
+- Operational simplicity for current repo maturity
+- Migration path to richer orchestration later
+
+## Option A: Lightweight Local Runner (Single Script + Config)
+
+### Architecture Sketch
+
+```text
+runner.py
+  -> load run config + snapshot inputs
+  -> write run_manifest.json (deterministic run_id)
+  -> execute reviewers in fixed order (or bounded parallel workers with deterministic scheduling)
+  -> persist per-reviewer state transitions to run_state.json
+  -> write reviewer artifacts + outcomes.jsonl
+  -> execute synthesizer
+  -> render summary.md from structured outputs
+```
+
+### Failure Semantics
+
+- Timeout per reviewer: fixed (ex: 120s), marked `timeout`.
+- Retry policy: max 1 retry for transient failures, fixed backoff (ex: 5s).
+- Capability failure (no web for `prior-art-scout`): mark `skipped_capability`, continue.
+- Partial run status: `partial_success` when at least mandatory reviewers complete.
+- Resume: rerun with `--resume <run_id>` to execute only `pending|retryable` reviewers.
+
+### Determinism Controls
+
+- Canonical reviewer order in config.
+- `run_id = sha256(canonical_manifest_without_timestamps)`.
+- Snapshot input file hashes (design, requirements, prompts) in manifest.
+- Fixed output paths per run (`docs/reviews/<topic>/runs/<run_id>/...`).
+- Stable serialization for JSON artifacts (sorted keys, newline-normalized text).
+- Deterministic summary rendering order (severity -> phase -> reviewer order).
+
+### Operational Complexity
+
+- Low. Standard library script + JSON files.
+- Easy local debugging and CI portability.
+
+### Migration Cost
+
+- Low initial cost, medium later if state model is ad hoc.
+- Keep migration low by defining state schema now as graph-compatible.
+
+### Fit For Current Parallax Stage
+
+- Strong fit. Keeps prototype velocity and solves the immediate deterministic-runner gap.
+
+## Option B: LangGraph Orchestration Now
+
+### Architecture Sketch
+
+```text
+LangGraph StateGraph
+  Nodes: snapshot -> dispatch reviewers -> collect -> synthesize -> render
+  Checkpointer: SQLite/Postgres
+  Human-interrupt hooks for partial failures and retries
+```
+
+### Failure Semantics
+
+- Native stateful retries per node.
+- Durable checkpoints and resume after crash.
+- Clear branch logic for skip/partial/fail paths.
+
+### Determinism Controls
+
+- Deterministic graph topology and node ordering.
+- Persisted state snapshots per step.
+- Reproducible replay from checkpoints if node code is deterministic.
+
+### Operational Complexity
+
+- Medium-high.
+- Adds framework concepts, dependency management, and runtime plumbing now.
+
+### Migration Cost
+
+- Higher upfront integration; lower long-term if multi-stage orchestration is imminent.
+
+### Fit For Current Parallax Stage
+
+- Premature for a single active stage unless we already need long-lived execution, queueing, and human interrupts beyond local runs.
+
+## Option C: Hybrid Phased Approach (Recommended Candidate)
+
+### Architecture Sketch
+
+```text
+Phase 1 (now): Local deterministic runner
+  - strict state schema
+  - explicit event log
+  - runtime adapters (codex/claude)
+
+Phase 2 (later): Wrap same state model in LangGraph
+  - map existing step handlers to graph nodes
+  - reuse artifact schema and replay rules
+```
+
+### Failure Semantics
+
+- Same as Option A immediately.
+- Adds richer branch/interrupt behavior later without changing artifact contract.
+
+### Determinism Controls
+
+- Deterministic contracts implemented now (IDs, ordering, snapshots).
+- LangGraph migration reuses contracts, preserving eval continuity.
+
+### Operational Complexity
+
+- Medium overall, but low immediate disruption.
+
+### Migration Cost
+
+- Lowest risk path if Phase 1 defines clean interfaces (`RunnerState`, `ReviewerResult`, `RetryPolicy`).
+
+### Fit For Current Parallax Stage
+
+- Best fit: incremental, reliable, and compatible with BUILD-novel/LEVERAGE-infra philosophy.
+
+## Head-to-Head Summary
+
+| Dimension | Option A | Option B | Option C |
+|---|---|---|---|
+| Time to first deterministic runner | Fastest | Slowest | Fast |
+| Reliability now | Good | Excellent | Good now, excellent later |
+| Reproducibility now | Good | Good | Good |
+| Complexity now | Low | High | Low-medium |
+| Long-term orchestration ceiling | Medium | High | High |
+| Risk of over-engineering | Low | High | Low |
+| Fit for current repo maturity | High | Medium-low | High |
+
+## Answers to Research Questions
+
+1. **Minimum deterministic runner:** Option A core from Option C: one local runner with manifest/state/event artifacts and resume support.
+2. **When LangGraph is worth it:** once we automate 2+ stages with persistent checkpoints/human interrupts, or need durable headless execution in CI/services.
+3. **Run state representation:** explicit state machine + event log + per-reviewer outcomes (attempt-level).
+4. **Canonical artifact format:** JSONL/JSON as source of truth; markdown as rendered human view.
+5. **Default retry/failure policy:** one retry for transient errors, zero retries for deterministic capability failures (no-web), explicit partial status.
+6. **Reproducibility controls:** manifest hashing, input snapshot hashes, stable ordering/serialization, deterministic render pipeline, pinned prompt files.
+
+## Assumptions and Unknowns
+
+Assumptions:
+- Design-stage review remains the only implemented stage for now.
+- `prior-art-scout` may run in environments without web access.
+- We can add runner artifacts without breaking existing review docs.
+
+Unknowns:
+- Cross-runtime differences in model settings (temperature/seed support) may limit strict output equivalence.
+- JSON extraction quality from reviewer markdown may require prompt tuning if we do not move reviewers to structured output quickly.
+
+### SUPPLEMENTAL CONTEXT (/Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-recommendation.md)
+# Deterministic Runner Recommendation
+
+**Date:** 2026-02-16  
+**Recommendation:** **Option C (Hybrid phased approach): build a lightweight deterministic local runner now, with a LangGraph-compatible state contract from day one.**
+
+## Executive Decision
+
+Implement a minimal local orchestrator in this repo next. Do not adopt LangGraph yet.  
+Design all runner artifacts and interfaces so migration to LangGraph is a wrapper change, not a data model rewrite.
+
+## Why This Is The Right Choice
+
+### Why now
+
+- We have one active stage (`review`), so framework overhead is not justified yet.
+- Determinism/replay/partial-failure handling are immediate blockers and can be solved quickly with local orchestration.
+- This keeps review behavior intact while adding reproducibility required for eval comparisons.
+
+### Why not now (LangGraph now)
+
+- LangGraph is strongest when we need durable multi-stage orchestration with complex branching and human interrupts across long-lived runs.
+- Adopting it before state/artifact contracts are settled increases churn and hides core design decisions behind framework abstraction.
+- Current risk is not graph control flow; it is lack of deterministic run contracts.
+
+## Target Architecture (Implement Next)
+
+### 1) Runner core
+
+- File: `scripts/review_runner.py` (or equivalent local script)
+- Inputs: stage, topic, design path, requirements path, runtime profile, retry profile
+- Output root: `docs/reviews/<topic>/runs/<run_id>/`
+
+### 2) Canonical state + artifacts
+
+Use structured artifacts as source of truth:
+
+- `run_manifest.json`
+  - immutable snapshot of inputs and config
+  - includes hashes of design/requirements/reviewer prompt files
+  - deterministic `run_id` derived from manifest (excluding runtime timestamps)
+- `run_state.json`
+  - current state machine snapshot:
+    - run: `created|running|partial_success|success|failed|cancelled`
+    - reviewer: `pending|running|succeeded|failed|skipped|timeout`
+- `events.jsonl`
+  - append-only event stream (`reviewer_started`, `reviewer_failed`, `retry_scheduled`, `synthesizer_completed`, etc.)
+- `reviewer_outcomes.jsonl`
+  - one record per reviewer attempt/outcome with error class and artifact hashes
+- `summary.json`
+  - machine-readable verdict and finding counts
+- `summary.md`
+  - rendered human view from `summary.json` + finding records
+
+Keep per-reviewer markdown outputs for continuity:
+- `assumption-hunter.md`, `edge-case-prober.md`, etc.
+
+### 3) Deterministic controls
+
+- Fixed reviewer order in config.
+- Stable JSON serialization (sorted keys, normalized newlines).
+- Deterministic summary rendering sort order.
+- Prompt snapshot hashing (agent file hash in manifest).
+- `--resume` replays only unfinished/retryable reviewer tasks from persisted state.
+
+### 4) Failure and retry policy (default)
+
+Reviewer policy defaults:
+
+- Non-web reviewers:
+  - timeout: 120s
+  - retry: 1 retry only for transient runtime/tool failures
+- `prior-art-scout` (web-dependent):
+  - if web unavailable: `skipped_capability` (no retry)
+  - if transient runtime failure and web available: 1 retry
+
+Run completion policy:
+
+- `success`: all mandatory reviewers succeeded, synthesizer succeeded.
+- `partial_success`: mandatory reviewers succeeded, optional reviewer(s) skipped/failed, synthesizer succeeded with partial flag.
+- `failed`: mandatory reviewer quorum not met or synthesizer failed.
+
+Mandatory set for design stage:
+- assumption-hunter
+- edge-case-prober
+- requirement-auditor
+- feasibility-skeptic
+- first-principles
+
+Optional by default:
+- prior-art-scout
+
+## Canonical Artifact Format Decision
+
+**Decision:** JSON/JSONL canonical, markdown rendered.
+
+Rationale:
+- explicit replay/debug mechanics
+- robust diffing and eval comparison across runtimes
+- avoids parsing markdown as primary machine interface
+- preserves existing markdown UX for human review
+
+## Reproducibility for Cross-Runtime Eval
+
+Define reproducibility as **process-deterministic + artifact-deterministic**, not byte-identical model text.
+
+Minimum reproducibility contract:
+- same manifest hash => same run plan (reviewers/order/policies)
+- same state transitions allowed from same failures
+- same output schema and rendering rules
+- differences in model wording captured as content variance, not orchestration variance
+
+This is enough to compare runtime behavior cleanly (Codex vs Claude) without pretending LLM text generation is fully deterministic.
+
+## LangGraph Adoption Trigger (Revisit Gate)
+
+Adopt LangGraph when at least two are true:
+
+1. We automate 2+ pipeline stages end-to-end.
+2. We need durable pause/resume with human checkpoints beyond a single local process.
+3. We run concurrent reviews where queueing/scheduling reliability matters.
+4. Local runner state logic grows into complex branching that is harder to reason about than a graph.
+
+Until then, local runner + strict contracts is the highest-leverage next step.
+
+## Assumptions and Unknowns
+
+Assumptions:
+- Immediate goal is deterministic orchestration, not broad platformization.
+- Existing reviewer prompts remain markdown-first in near term.
+
+Unknowns:
+- Whether reviewers should emit structured finding JSON directly vs synthesizer conversion.
+- How much cross-runtime variance appears once deterministic orchestration is in place.
+
+### SUPPLEMENTAL CONTEXT (/Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-plan.md)
+# Deterministic Runner Implementation Plan
+
+**Date:** 2026-02-16  
+**Goal:** Add a deterministic, replayable design-stage runner with explicit partial-failure handling, while preserving current `skills/review` behavior.
+
+## Increment 0: Lock Contracts Before Code
+
+1. Define and commit artifact schemas:
+   - `docs/specs/review-run-manifest.schema.json`
+   - `docs/specs/review-run-state.schema.json`
+   - `docs/specs/review-event.schema.json`
+   - `docs/specs/reviewer-outcome.schema.json`
+2. Add deterministic status enums and error classes (`transient`, `timeout`, `capability_unavailable`, `fatal`).
+3. Verification:
+   - Schema files exist and include required fields for `run_id`, reviewer status, and retry metadata.
+
+## Increment 1: Manifest Builder (No Execution Yet)
+
+1. Add `scripts/review_runner.py` with a `plan` mode:
+   - reads input args
+   - snapshots file hashes (design/requirements/agents)
+   - computes deterministic `run_id`
+   - writes `run_manifest.json`
+2. Add fixture inputs under `tests/fixtures/review_runner/`.
+3. Verification:
+   - Running `plan` twice with identical inputs produces identical manifest content except runtime timestamps.
+
+## Increment 2: State Store + Event Log
+
+1. Implement `run_state.json` writer with atomic writes.
+2. Implement append-only `events.jsonl`.
+3. Add state transitions for run + reviewer lifecycle.
+4. Verification:
+   - Simulated run transitions follow allowed state graph only.
+   - Event log contains ordered lifecycle events.
+
+## Increment 3: Reviewer Config + Ordering
+
+1. Add stage config (`config/review_runner.yaml`) with:
+   - reviewer list in canonical order
+   - mandatory/optional reviewer flags
+   - timeout/retry defaults
+2. Add validation that `design` stage reviewer set matches current skill behavior.
+3. Verification:
+   - Config load fails fast on unknown reviewer names or duplicate order entries.
+
+## Increment 4: Runtime Adapter Interface
+
+1. Define adapter contract (`run_reviewer(reviewer, manifest, attempt) -> outcome`).
+2. Implement runtime adapters:
+   - `claude_adapter.py`
+   - `codex_adapter.py`
+   - `codex_app_handoff_adapter.py` (task-pack + ingest mode for GUI-only flow)
+3. Add runtime capability detection:
+   - CLI available (`codex`/`claude` in PATH or configured binary)
+   - non-interactive mode support
+   - fallback to handoff adapter when CLI automation is unavailable
+4. Start with a fake adapter for deterministic tests.
+5. Verification:
+   - Fake adapter run produces deterministic `reviewer_outcomes.jsonl` records.
+   - Capability probe selects expected adapter in all three cases:
+     - Claude Code CLI available
+     - Codex CLI available
+     - Codex App only (handoff fallback)
+
+## Increment 5: Failure Policy Engine
+
+1. Implement retry decision logic:
+   - one retry for transient failures
+   - no retry for capability unavailability (no web)
+2. Encode `prior-art-scout` policy override.
+3. Verification:
+   - Unit tests for failure classification and retry scheduling.
+
+## Increment 6: Execution + Resume
+
+1. Add `run` command to execute reviewers and persist outcomes.
+2. Add `--resume <run_id>` to continue `pending|retryable` reviewers only.
+3. Ensure crash-safe resume from state files.
+4. Verification:
+   - Kill run mid-flight, resume, and confirm completed reviewers are not rerun.
+
+## Increment 7: Synthesizer Integration
+
+1. Execute synthesizer only after reviewer phase reaches terminal state (`success` or `partial_success`).
+2. Persist `summary.json` machine output and render `summary.md`.
+3. Include explicit partial-run notice when optional reviewer(s) failed/skipped.
+4. Verification:
+   - Partial run with missing `prior-art-scout` still produces summary with `partial` marker.
+
+## Increment 8: Canonical Finding Records
+
+1. Add `findings.jsonl` as source-of-truth output for synthesized findings.
+2. Render markdown summary from `findings.jsonl` + verdict metadata.
+3. Keep existing reviewer markdown files unchanged.
+4. Verification:
+   - Markdown regeneration from JSONL is deterministic (same input => same rendered ordering).
+
+## Increment 9: Reproducibility and Diff Utilities
+
+1. Add `scripts/compare_runs.py`:
+   - compares manifests, state outcomes, finding counts, verdicts across two run IDs
+2. Add a portability smoke command for same artifact on Codex vs Claude runtimes.
+3. Verification:
+   - Comparison output separates orchestration drift from model-content drift.
+
+## Increment 10: CI Safety Nets
+
+1. Add automated checks for:
+   - schema validity
+   - deterministic serialization
+   - resume behavior
+2. Add one golden-run fixture for deterministic regression detection.
+3. Verification:
+   - CI fails on contract-breaking schema or nondeterministic render order.
+
+## Increment 11: Docs and Adoption
+
+1. Update `skills/review/SKILL.md` with runner invocation contract and artifact locations.
+2. Add operator doc:
+   - `docs/runbooks/review-runner.md` (run, resume, retry, partial interpretation)
+3. Document LangGraph adoption trigger criteria in runbook.
+4. Verification:
+   - New runbook can be followed end-to-end in a clean workspace.
+
+## Default Execution Policy (to implement)
+
+- Runtime selection:
+  - `--runtime claude` -> `claude_adapter.py`
+  - `--runtime codex` -> `codex_adapter.py` when CLI available
+  - `--runtime codex` + no CLI -> `codex_app_handoff_adapter.py` with explicit `manual_handoff` status
+- Timeout: `120s` per reviewer attempt.
+- Retry: `1` retry for transient errors only.
+- Capability unavailable (no web): skip `prior-art-scout` with explicit status.
+- Terminal outcomes:
+  - `success`: all mandatory reviewers + synthesizer succeeded.
+  - `partial_success`: mandatory succeeded, optional reviewer failed/skipped, synthesizer succeeded.
+  - `failed`: mandatory quorum not met or synthesizer failed.
+  - `waiting_for_handoff`: run paused pending user-provided artifacts from Codex App flow.
+
+## Rollout Sequence (Small, Testable)
+
+1. Land contracts and manifest first.
+2. Land state/events second.
+3. Land fake-adapter deterministic tests third.
+4. Land real adapters (Claude CLI, Codex CLI, Codex App handoff) + retries fourth.
+5. Land synthesizer + JSONL canonical output fifth.
+6. Land resume and comparison tooling sixth.
+7. Update docs last.
+
+This sequence keeps every step shippable and verifiable without requiring immediate multi-stage orchestration changes.
+
+mcp startup: no servers
+2026-02-16T04:26:54.035516Z ERROR codex_core::rollout::list: state db missing rollout path for thread 019c64ad-1495-7d03-a981-14e2591f922d
+2026-02-16T04:26:54.035584Z  WARN codex_core::state_db: state db record_discrepancy: find_thread_path_by_id_str_in_subdir, falling_back
+2026-02-16T04:26:54.070882Z ERROR codex_core::rollout::list: state db missing rollout path for thread 019c647c-7341-77e1-8065-26150a1e84c6
+2026-02-16T04:26:54.070969Z  WARN codex_core::state_db: state db record_discrepancy: find_thread_path_by_id_str_in_subdir, falling_back
+2026-02-16T04:26:54.112072Z ERROR codex_core::rollout::list: state db missing rollout path for thread 019c6457-f013-76d3-9ed3-180d250b58ea
+2026-02-16T04:26:54.112129Z  WARN codex_core::state_db: state db record_discrepancy: find_thread_path_by_id_str_in_subdir, falling_back
+
+thinking
+**Planning structured review findings**
+codex
+# First Principles Review
+
+## Problem Reframe
+The core problem is not “run reviewers deterministically”; it is “separate orchestration variance from model variance so cross-runtime evaluation is trustworthy.” From zero, I would define the product as an evaluation contract first (machine-readable outcomes + deterministic orchestration), then add human-readable rendering. The current design frames markdown continuity as primary and treats evaluability as a later increment, which inverts that order.
+
+## Findings
+
+### Finding 1: Canonical Markdown Solves Documentation Continuity, Not Eval Determinism
+- **Severity:** Critical
+- **Phase:** calibrate (primary), design (contributing)
+- **Section:** Overview, Outputs, Migration Strategy
+- **Issue:** The design keeps `summary.md` as canonical and defers canonical `summary.json`/`findings.jsonl`, while the stated goal is reproducible cross-runtime eval.
+- **Why it matters:** Markdown-first canon preserves human workflow but blocks deterministic machine comparison as the first-class contract. Blast radius is every run used for Codex-vs-Claude analysis, because parsing/rendering interpretation remains part of the measurement path.
+- **Suggestion:** Reframe the core deliverable as “deterministic eval artifact contract.” Make JSON/JSONL canonical now and render markdown from it in the same increment.
+
+### Finding 2: Manual GUI Handoff Inside the Deterministic Runner Preserves a Non-Deterministic Step
+- **Severity:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Adapter Layer, Handoff policy, Run-level states
+- **Issue:** `codex_app_handoff_adapter` and `waiting_for_handoff` embed human-mediated execution into the deterministic path.
+- **Why it matters:** Human handoff introduces uncontrolled latency, operator variance, and artifact timing differences into the same state machine that claims deterministic replay semantics. Blast radius is all Codex environments without CLI automation, plus any parity conclusions drawn from those runs.
+- **Suggestion:** Split concerns: keep deterministic runner fully automated-only, and move GUI handoff to a separate “manual recovery workflow” that is explicitly excluded from deterministic cross-runtime comparisons.
+
+### Finding 3: Capability Handling Is Hard-Coded to One Reviewer Instead of Modeled as a General Constraint System
+- **Severity:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Section:** Partial Failure Policy, Capability preflight
+- **Issue:** The design special-cases `prior-art-scout` no-web behavior and escalation logic instead of defining a generic capability matrix and policy engine.
+- **Why it matters:** This solves today’s known failure and locks architecture to current reviewer composition. Blast radius expands with every new capability-dependent reviewer, forcing policy rewrites and inconsistent semantics across lanes.
+- **Suggestion:** Define per-reviewer capability requirements in config and enforce one generic “capability_unavailable” policy path (status, retryability, escalation thresholds) for all reviewers.
+
+### Finding 4: Jittered Retry Timing Conflicts with the Declared Determinism Objective
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Retry Policy, Determinism Controls
+- **Issue:** Retry delay includes `jitter_ms = 0..500` without a deterministic seed contract.
+- **Why it matters:** Unseeded jitter changes event timelines and attempt metadata across identical runs, weakening replay equivalence claims at the orchestration layer. Blast radius is every transient-failure run, the exact class where reproducibility matters most.
+- **Suggestion:** Use deterministic jitter derived from manifest/run hash and attempt number, or remove jitter in deterministic mode and reserve random jitter for non-eval operational mode.
+
+### Finding 5: Scope Locks on “Design Stage Only” Instead of Solving the Root Reliability Boundary
+- **Severity:** Minor
+- **Phase:** survey (primary), calibrate (contributing)
+- **Section:** Scope, Migration Strategy
+- **Issue:** The design treats stage isolation as a hard product boundary rather than a temporary rollout boundary.
+- **Why it matters:** The root reliability boundary is pipeline-level comparability, not single-stage execution. Stage-only framing postpones contract decisions that should stay stable across all stages (identity, events, terminal semantics).
+- **Suggestion:** Keep implementation rollout single-stage, but declare schemas and state semantics as pipeline-global contracts now.
+
+## Blind Spot Check (optional — being empirically validated)
+I emphasized root framing and determinism purity over delivery speed. Other reviewers will better surface practical tradeoffs like migration risk, operator ergonomics, and short-term adoption friction in existing markdown-first workflows.
+tokens used
+12,625
+# First Principles Review
+
+## Problem Reframe
+The core problem is not “run reviewers deterministically”; it is “separate orchestration variance from model variance so cross-runtime evaluation is trustworthy.” From zero, I would define the product as an evaluation contract first (machine-readable outcomes + deterministic orchestration), then add human-readable rendering. The current design frames markdown continuity as primary and treats evaluability as a later increment, which inverts that order.
+
+## Findings
+
+### Finding 1: Canonical Markdown Solves Documentation Continuity, Not Eval Determinism
+- **Severity:** Critical
+- **Phase:** calibrate (primary), design (contributing)
+- **Section:** Overview, Outputs, Migration Strategy
+- **Issue:** The design keeps `summary.md` as canonical and defers canonical `summary.json`/`findings.jsonl`, while the stated goal is reproducible cross-runtime eval.
+- **Why it matters:** Markdown-first canon preserves human workflow but blocks deterministic machine comparison as the first-class contract. Blast radius is every run used for Codex-vs-Claude analysis, because parsing/rendering interpretation remains part of the measurement path.
+- **Suggestion:** Reframe the core deliverable as “deterministic eval artifact contract.” Make JSON/JSONL canonical now and render markdown from it in the same increment.
+
+### Finding 2: Manual GUI Handoff Inside the Deterministic Runner Preserves a Non-Deterministic Step
+- **Severity:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Adapter Layer, Handoff policy, Run-level states
+- **Issue:** `codex_app_handoff_adapter` and `waiting_for_handoff` embed human-mediated execution into the deterministic path.
+- **Why it matters:** Human handoff introduces uncontrolled latency, operator variance, and artifact timing differences into the same state machine that claims deterministic replay semantics. Blast radius is all Codex environments without CLI automation, plus any parity conclusions drawn from those runs.
+- **Suggestion:** Split concerns: keep deterministic runner fully automated-only, and move GUI handoff to a separate “manual recovery workflow” that is explicitly excluded from deterministic cross-runtime comparisons.
+
+### Finding 3: Capability Handling Is Hard-Coded to One Reviewer Instead of Modeled as a General Constraint System
+- **Severity:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Section:** Partial Failure Policy, Capability preflight
+- **Issue:** The design special-cases `prior-art-scout` no-web behavior and escalation logic instead of defining a generic capability matrix and policy engine.
+- **Why it matters:** This solves today’s known failure and locks architecture to current reviewer composition. Blast radius expands with every new capability-dependent reviewer, forcing policy rewrites and inconsistent semantics across lanes.
+- **Suggestion:** Define per-reviewer capability requirements in config and enforce one generic “capability_unavailable” policy path (status, retryability, escalation thresholds) for all reviewers.
+
+### Finding 4: Jittered Retry Timing Conflicts with the Declared Determinism Objective
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Retry Policy, Determinism Controls
+- **Issue:** Retry delay includes `jitter_ms = 0..500` without a deterministic seed contract.
+- **Why it matters:** Unseeded jitter changes event timelines and attempt metadata across identical runs, weakening replay equivalence claims at the orchestration layer. Blast radius is every transient-failure run, the exact class where reproducibility matters most.
+- **Suggestion:** Use deterministic jitter derived from manifest/run hash and attempt number, or remove jitter in deterministic mode and reserve random jitter for non-eval operational mode.
+
+### Finding 5: Scope Locks on “Design Stage Only” Instead of Solving the Root Reliability Boundary
+- **Severity:** Minor
+- **Phase:** survey (primary), calibrate (contributing)
+- **Section:** Scope, Migration Strategy
+- **Issue:** The design treats stage isolation as a hard product boundary rather than a temporary rollout boundary.
+- **Why it matters:** The root reliability boundary is pipeline-level comparability, not single-stage execution. Stage-only framing postpones contract decisions that should stay stable across all stages (identity, events, terminal semantics).
+- **Suggestion:** Keep implementation rollout single-stage, but declare schemas and state semantics as pipeline-global contracts now.
+
+## Blind Spot Check (optional — being empirically validated)
+I emphasized root framing and determinism purity over delivery speed. Other reviewers will better surface practical tradeoffs like migration risk, operator ergonomics, and short-term adoption friction in existing markdown-first workflows.

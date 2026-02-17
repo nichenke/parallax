@@ -7,6 +7,16 @@
 
 ---
 
+## Problem Statement
+
+Parallax skills are developed iteratively with no systematic way to measure effectiveness. Changes to skill prompts may improve, degrade, or have no effect on finding quality—we cannot tell which. This blocks empirical improvement and risks shipping broken skills to production.
+
+**Core challenge:** Ground truth validation is circular. We need verified design flaws to test detection capability, but we need detection capability to find design flaws.
+
+**Initial approach:** Manual validation of v3 Critical findings to establish high-confidence ground truth baseline, then expand incrementally with manual review gates.
+
+---
+
 ## Jobs-to-Be-Done
 
 This integration addresses five validated needs from the parallax development workflow:
@@ -46,6 +56,23 @@ This integration addresses five validated needs from the parallax development wo
 ---
 
 ## Functional Requirements
+
+### FR0: Ground Truth Validation (Prerequisite)
+
+**FR0:** Establish validated ground truth via human expert review of v3 Critical findings
+- **Rationale:** Break circular validation dependency—cannot validate eval framework against unvalidated LLM outputs. Ground truth quality determines eval framework validity.
+- **Source:** Critical findings v1-problem-framer-006, v1-assumption-hunter-001, v1-constraint-finder-009
+- **Acceptance Criteria:**
+  - Expert reviewer (human, not LLM) examines each of 22 v3 Critical findings
+  - Each finding classified as: (a) real design flaw, (b) false positive, (c) ambiguous/needs-context
+  - Only category (a) findings used as ground truth for eval framework
+  - Validation process documented: criteria for classification, false positive rate
+  - If multiple reviewers: inter-rater agreement measured (Cohen's kappa ≥0.6)
+  - `datasets/v3_review_validated/` created with confirmed findings only
+  - Each finding includes metadata: reviewer ID, confidence score, validation date
+  - Target: ≥15 confirmed real flaws (68% validation rate) for sufficient test data
+
+---
 
 ### FR1: Inspect AI Integration
 
@@ -90,31 +117,31 @@ This integration addresses five validated needs from the parallax development wo
 
 **FR2.2:** Scorer validates only Critical findings in MVP
 - **Rationale:** Highest confidence data, validates framework before expanding to Important/Minor
-- **Source:** User Q&A (start with Critical to get framework working)
+- **Source:** User Q&A (start with Critical to get framework working), Critical finding v1-success-validator-001
 - **Acceptance Criteria:**
   - Scorer filters to Critical severity findings only
   - Compares detected Critical findings to ground truth Critical findings
   - Reports detection rate (recall), precision, F1 score
-
-**FR2.3:** Scorer supports manual validation workflow for <95% confidence findings
-- **Rationale:** Prevent false positives from polluting ground truth datasets
-- **Source:** User Q&A (manual subagent validation for <95% confidence)
-- **Acceptance Criteria:**
-  - Scorer outputs low-confidence findings to separate file for review
-  - User reviews via subagent, accepts/rejects findings
-  - Accepted findings added to ground truth, rejected findings excluded
+  - Initial target thresholds (provisional, adjust after analyzing failures):
+    - Detection rate (recall) ≥90% (per Success Criteria #4)
+    - Precision ≥80% (minimize false positives)
+    - F1 score ≥0.74 (balanced performance)
+  - Any result below thresholds triggers failure analysis to understand gaps and tune thresholds
+  - Post-MVP: Background job reviews "passing but not perfect" cases (e.g., 91-99% detection) to detect slippage over time
 
 ---
 
 ### FR3: Test Datasets
 
-**FR3.1:** Convert v3 review artifacts to Inspect AI Dataset format
-- **Rationale:** Most comprehensive ground truth (87 findings, 12 patterns), validated in Session 15
-- **Source:** ADR-005 (test datasets), user Q&A (start with v3)
+**FR3.1:** Convert validated ground truth to format consumable by Inspect AI
+- **Rationale:** Eval framework requires machine-readable dataset in Inspect AI's expected format
+- **Source:** ADR-005 (test datasets), user Q&A (start with v3), Critical finding v1-scope-guardian-004
 - **Acceptance Criteria:**
-  - `datasets/v3_review/` directory with JSONL findings
-  - Dataset includes only Critical findings for MVP (expand to Important/Minor post-MVP)
-  - Dataset metadata: 22 Critical findings (ground truth count from MEMORY.md v3 summary)
+  - Validated findings from FR0 converted to Inspect AI-compatible format
+  - Dataset includes only confirmed Critical findings (≥15 from ground truth validation)
+  - Inspect AI eval task can load and process the dataset without errors
+  - Dataset schema documented (research Inspect AI Dataset/Sample format during Phase 1 design)
+  - Conversion process documented for future dataset additions
 
 **FR3.2:** Support incremental dataset expansion
 - **Rationale:** Validate integration pattern with v3 first, then add requirements-light, pattern-extraction, parallax-review
@@ -139,10 +166,16 @@ This integration addresses five validated needs from the parallax development wo
 
 **FR4.1:** Test that dropping skill content degrades detection rate >50%
 - **Rationale:** Validates that skill content actually matters (not just model inference)
-- **Source:** User Q&A (adversarial and ablation tests), Issue #5 (ablation test type)
+- **Source:** User Q&A (adversarial and ablation tests), Issue #5 (ablation test type), Critical finding v1-success-validator-002
 - **Acceptance Criteria:**
-  - Baseline: Full skill content → detection rate X%
-  - Ablation: Drop all/most skill content → detection rate < (X - 50)%
+  - **Baseline (X):** Full skill content achieves detection rate X% on validated ground truth (established in FR6.1)
+  - **Baseline prerequisite:** X must be ≥90% (per Success Criteria #4) to validate baseline quality before ablation
+  - **Ablation:** Drop all/most skill content → detection rate drops to <(X - 50)%
+  - **Pass criteria:** If baseline X=90%, ablation must drop to <40%. If drop is only to 60%, test fails (skill content not contributing)
+  - **Example thresholds (provisional):**
+    - Baseline 90% → ablation <40% = PASS (50% absolute drop)
+    - Baseline 90% → ablation 60% = FAIL (only 30% drop, skill content weak)
+    - Baseline 70% → ablation <20% = PASS (would pass but baseline below threshold)
   - Test fails if ablation doesn't significantly degrade performance (skill content not contributing)
 
 **FR4.2:** Coarse-grained ablation for MVP (section-level removal)
@@ -206,17 +239,23 @@ This integration addresses five validated needs from the parallax development wo
 
 ### FR7: Version Comparison
 
-**FR7.1:** Support running evals against different skill versions
-- **Rationale:** A/B test prompt changes (e.g., "Does adding blind spot check improve coverage?")
-- **Source:** FR3 (empirical iteration)
+**FR7.1:** Eval runs must be comparable by skill/plugin version
+- **Rationale:** A/B test prompt changes (e.g., "Does adding blind spot check improve coverage?"), track skill evolution, detect regressions
+- **Source:** FR3 (empirical iteration), Critical finding v1-assumption-hunter-005
 - **Acceptance Criteria:**
-  - Eval runner accepts `--skill-version` parameter (git commit hash or branch name)
-  - Eval runs skill from specified version against same test dataset
+  - Each eval run captures skill/plugin version metadata
+  - Eval results can be filtered and compared by version
+  - Version identifiers are unique and stable (same skill content → same version)
   - Report compares metrics across versions side-by-side
 
-**FR7.2:** Deferred to post-MVP
-- **Rationale:** Requires git integration, version management complexity
-- **Post-MVP scope:** Automated version comparison in CI/CD
+**FR7.2:** Deferred to post-MVP (versioning mechanism is Phase 2 design research)
+- **Rationale:** Requires design research - versioning strategy depends on skill packaging (git commit, content hash, plugin version)
+- **Phase 2 design questions:**
+  - How to version skills: git commit hash, content hash, plugin semantic version?
+  - Native solutions: Claude API (prompt versioning), OpenAI (fine-tune versioning)
+  - Skill snapshot vs reference: copy skill content into dataset or reference external version?
+  - If skills are in superpowers plugin: how to track plugin version across parallax eval runs?
+- **Post-MVP scope:** Implement chosen versioning strategy, automated version comparison in CI/CD
 
 ---
 
@@ -253,7 +292,27 @@ This integration addresses five validated needs from the parallax development wo
 
 ## Non-Functional Requirements
 
-### NFR1: Cost Tracking
+### NFR1: API Key Security
+
+**NFR1.1:** API keys never committed to version control
+- **Rationale:** Security policy compliance, prevent credential leaks
+- **Source:** Critical finding v1-constraint-finder-002
+- **Acceptance Criteria:**
+  - API keys stored in environment variables or local config files (gitignored)
+  - `.gitignore` includes patterns for credential files
+  - Pre-commit hook blocks commits containing API key patterns
+
+**NFR1.2:** Work/personal key separation for audit compliance
+- **Rationale:** Billing attribution, corporate policy compliance
+- **Source:** Critical finding v1-constraint-finder-002
+- **Acceptance Criteria:**
+  - Personal development uses personal API keys or Bedrock credentials
+  - Work context uses separate Bedrock IAM roles
+  - Key rotation procedure documented (frequency and process TBD in Phase 1)
+
+---
+
+### NFR2: Cost Tracking
 
 **NFR1.1:** Log token usage and cost per eval run
 - **Rationale:** Stay within $2000/month budget, optimize spend
@@ -272,7 +331,7 @@ This integration addresses five validated needs from the parallax development wo
 
 ---
 
-### NFR2: Model Tiering
+### NFR3: Model Tiering
 
 **NFR2.1:** Use Sonnet for LLM-as-judge scorers (post-MVP)
 - **Rationale:** Balance cost and quality for subjective evaluation
@@ -291,7 +350,7 @@ This integration addresses five validated needs from the parallax development wo
 
 ---
 
-### NFR3: Batch API Integration
+### NFR4: Batch API Integration
 
 **NFR3.1:** Deferred to post-initial-development
 - **Rationale:** 1-24 hour delay would slow down development velocity, add after MVP validated
@@ -305,7 +364,7 @@ This integration addresses five validated needs from the parallax development wo
 
 ---
 
-### NFR4: Development Velocity
+### NFR5: Development Velocity
 
 **NFR4.1:** Local eval runs complete in <5 minutes for rapid iteration
 - **Rationale:** Enable tight feedback loop during scorer development
@@ -323,7 +382,7 @@ This integration addresses five validated needs from the parallax development wo
 
 ---
 
-### NFR5: Reproducibility
+### NFR6: Reproducibility
 
 **NFR5.1:** Eval definitions in version control (git)
 - **Rationale:** Track eval changes alongside skill changes
@@ -344,13 +403,21 @@ This integration addresses five validated needs from the parallax development wo
 
 ## MVP Scope Summary
 
+**Phase 0: Establish Ground Truth (Target: 2-4 weeks, PREREQUISITE)**
+1. Human expert validation of v3 Critical findings (22 findings)
+2. Each finding classified: real flaw / false positive / ambiguous
+3. Document validation process and criteria
+4. Create `datasets/v3_review_validated/` with confirmed findings only
+5. Target: ≥15 validated findings for sufficient test data
+6. Success criteria: Ground truth dataset exists, validation documented
+
 **Phase 1: Validate Integration Pattern (Target: 1 week)**
 1. Install Inspect AI, configure Anthropic provider
 2. Build `severity_calibration_scorer.py` (Critical findings only)
-3. Convert v3 Critical findings to Dataset format (manual validation gate)
-4. Run first eval: baseline detection rate for v3 Critical findings
+3. Convert validated ground truth to Inspect AI Dataset format
+4. Run first eval: baseline detection rate for validated Critical findings
 5. Build coarse-grained ablation test (drop skill content → detection rate drops >50%)
-6. Success criteria: Eval runs locally, validates Critical findings, ablation test passes
+6. Success criteria: Eval runs locally, validates against confirmed flaws, ablation test passes
 
 **Phase 2: Expand Test Coverage (Post-MVP)**
 7. Add Important/Minor findings to severity calibration
@@ -380,13 +447,13 @@ This integration addresses five validated needs from the parallax development wo
 ## Success Criteria
 
 **MVP Complete When:**
-1. ✅ Inspect AI installed, configured with Anthropic provider
-2. ✅ Severity calibration scorer runs on v3 Critical findings
-3. ✅ Baseline detection rate established and documented
-4. ✅ Ablation test validates skill content contributes >50% to detection rate
-5. ✅ Manual validation workflow operational (<95% confidence → user review)
+1. ✅ Ground truth validated (Phase 0): ≥15 confirmed Critical findings from v3 review
+2. ✅ Inspect AI installed, configured with Anthropic provider
+3. ✅ Severity calibration scorer runs on validated Critical findings
+4. ✅ Baseline detection rate ≥90% on validated ground truth (proves skills catch real flaws) — threshold provisional, adjust based on MVP results
+5. ✅ Ablation test validates skill content contributes >50% to detection rate
 6. ✅ Eval runs locally in <5 minutes
-7. ✅ Cost per eval run <$0.50
+7. ✅ Cost per eval run <$2.00 (revised from $0.50, see constraint-finder-003)
 8. ✅ EvalLog captures token usage, cost, latency
 
 **Post-MVP Expansion Criteria:**
@@ -400,11 +467,10 @@ This integration addresses five validated needs from the parallax development wo
 
 ## Open Questions
 
-1. **Ground truth validation threshold:** Is 95% confidence the right threshold for auto-adding findings to ground truth? Or should it be higher/lower?
-2. **Ablation threshold:** Is >50% detection rate drop the right threshold for "skill content matters"? Or should it be stricter (>70%)?
-3. **Baseline update frequency:** How often should baselines be recalculated as skills evolve? After every major skill change, or periodically (weekly/monthly)?
-4. **Multi-model grading:** Should we use Haiku as LLM-as-judge grader (cost) or Sonnet (quality)? Or start with Sonnet, optimize to Haiku later?
-5. **Dataset size for MVP:** 22 Critical findings from v3 review — is this sufficient sample size, or should we include requirements-light Critical findings too?
+1. **Ablation threshold:** Is >50% detection rate drop the right threshold for "skill content matters"? Or should it be stricter (>70%)?
+2. **Baseline update frequency:** How often should baselines be recalculated as skills evolve? After every major skill change, or periodically (weekly/monthly)?
+3. **Multi-model grading:** Should we use Haiku as LLM-as-judge grader (cost) or Sonnet (quality)? Or start with Sonnet, optimize to Haiku later?
+4. **Dataset size for MVP:** 15+ validated Critical findings from v3 review — is this sufficient sample size, or should we include requirements-light Critical findings too?
 
 ---
 

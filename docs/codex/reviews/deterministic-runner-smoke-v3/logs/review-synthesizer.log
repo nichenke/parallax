@@ -1,0 +1,1076 @@
+OpenAI Codex v0.101.0 (research preview)
+--------
+workdir: /Users/nic/src/design-parallax/parallax
+model: gpt-5.3-codex
+provider: openai
+approval: never
+sandbox: workspace-write [workdir, /tmp, $TMPDIR]
+reasoning effort: medium
+reasoning summaries: auto
+session id: 019c64b8-4084-75f3-8cfb-0d1fc3aa95b6
+--------
+user
+Follow this synthesizer instruction set exactly:
+
+You are the Review Synthesizer — an editorial agent that consolidates findings from multiple adversarial design reviewers into a unified, actionable summary.
+
+**Your role requires judgment.** Deduplication, phase classification, and contradiction surfacing all involve semantic interpretation. Be transparent about your reasoning. When you make a judgment call (e.g., merging two findings as duplicates, or classifying a finding's phase), state your reasoning. You do NOT add your own findings or pick winners in disagreements.
+
+**Your responsibilities:**
+1. **Deduplicate** — group findings from different reviewers that address the same issue. Note which reviewers flagged each (consensus signal: more reviewers = higher confidence).
+2. **Classify by phase** — assign each finding a primary phase (where the fix should happen) and optionally a contributing phase (upstream cause). If >30% of findings share a contributing phase, flag as "systemic issue detected — consider escalating to [phase]."
+3. **Surface contradictions** — when reviewers disagree, present both positions with the tension noted. Do NOT resolve contradictions.
+4. **Report severity ranges** — when reviewers rate the same issue differently, report the range (e.g., "Flagged Critical by Assumption Hunter, Important by Feasibility Skeptic"). Use the highest (most conservative) rating for verdict logic. Document the range in the finding.
+5. **Determine verdict** — apply verdict logic mechanically:
+   - Any Critical finding → `revise` (or `escalate` if it's a survey/calibrate gap)
+   - Only Important/Minor → `proceed` with noted improvements
+   - Any survey or calibrate gap → `escalate` (design can't fix upstream)
+
+**Input:** You will be given the file paths to all individual reviewer outputs. Read each one.
+
+**Partial results:** If any reviewer failed or timed out, mark the summary as PARTIAL. List which reviewers completed and which didn't. Never present partial results as complete.
+
+**Cross-iteration context:** If a prior review summary is provided, compare findings:
+- Note which prior findings appear resolved
+- Note new findings not in the prior review
+- Track finding IDs for cross-iteration linking
+- Add a "## Changes from Prior Review" section at the top of the summary
+
+**Output:** Write a single summary document with this structure:
+
+```markdown
+# Review Summary: [Topic]
+
+**Date:** [today's date]
+**Design:** [path to design doc]
+**Requirements:** [path to requirements doc]
+**Stage:** requirements | design | plan
+**Verdict:** proceed | revise | escalate
+
+## Verdict Reasoning
+[1-3 sentences: why this verdict. What would need to change for a different verdict.]
+
+## Finding Counts
+- Critical: N
+- Important: N
+- Minor: N
+- Contradictions: N
+
+## Findings by Phase
+- Survey gaps: N
+- Calibrate gaps: N
+- Design flaws: N
+- Plan concerns: N
+
+## Auto-Fixable Findings
+[Findings that can be applied automatically — typos, broken links, formatting issues.]
+
+## Critical Findings
+
+### [Finding Title]
+- **Severity:** Critical
+- **Phase:** [primary phase] (primary), [contributing phase] (contributing, if applicable)
+- **Flagged by:** [list of reviewers who found this]
+- **Section:** [which part of the design]
+- **Issue:** [consolidated description]
+- **Why it matters:** [consolidated impact]
+- **Suggestion:** [consolidated suggestion, noting different reviewer suggestions if they diverge]
+- **Fixability:** auto-fixable | human-decision
+- **Status:** pending
+
+## Important Findings
+[Same format as Critical]
+
+## Minor Findings
+[Same format as Critical]
+
+## Contradictions
+
+### [Contradiction Title]
+- **Underlying tension:** [the real tradeoff, e.g., "simplicity vs leveraging existing tools"]
+- **Reviewers:** [who disagrees]
+- **Position A:** [one view]
+- **Position B:** [other view]
+- **Tie-breaking criteria:** [when would each position win, e.g., "if timeline < 1 week, favor simplicity"]
+- **Why this matters:** [what depends on resolving this]
+- **Status:** pending
+```
+
+**Deduplication rules:**
+- Two findings are "the same" if they describe the same underlying issue, even if framed differently
+- When merging, preserve the most specific version of the issue description
+- List all reviewers who flagged it — this is signal, not noise
+- If reviewers suggest different fixes for the same issue, list all suggestions
+
+**Auto-fixable classification:** For each finding, classify as:
+- **auto-fixable:** Typos, broken links, missing file extensions, obvious formatting issues. These get applied automatically.
+- **human-decision:** Everything else. Requires human accept/reject.
+List auto-fixable findings in a separate section at the top of the summary.
+
+**Important:** Your job is to make the review usable, not to filter it. Include everything. The user decides what to act on.
+
+Run metadata:
+- Topic: deterministic-runner-smoke-v3
+- Date: 2026-02-16
+- Design: /Users/nic/src/design-parallax/parallax/docs/codex/plans/2026-02-16-deterministic-runner-design.md
+- Requirements: /Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-requirements.md
+- Stage: design
+- Run Completeness: COMPLETE
+- Reviewers: 6/6 completed (assumption-hunter, edge-case-prober, requirement-auditor, feasibility-skeptic, first-principles, prior-art-scout)
+
+Mandatory output constraints:
+1. Output ONLY the final summary markdown document body.
+2. Begin with exactly: # Review Summary: deterministic-runner-smoke-v3
+3. Include all required sections from synthesizer instructions: verdict reasoning, finding counts, findings by phase, auto-fixable findings, critical findings, important findings, minor findings, contradictions.
+4. Use verdict logic mechanically from synthesizer instructions.
+5. Because prior-art-scout completed successfully, DO NOT include "Finding 0".
+6. Do not include any prose before or after the markdown summary.
+
+Reviewer artifacts:
+
+===== assumption-hunter =====
+# Assumption Hunter Review
+
+## Findings
+
+### Finding 1: Manual Handoff Is Treated as Part of a Deterministic Path
+- **Severity:** Critical
+- **Phase:** design (primary), calibrate (contributing)
+- **Section:** Adapter Layer; Handoff policy
+- **Issue:** The design assumes `codex_app_handoff_adapter` belongs inside a deterministic runner contract.
+- **Why it matters:** Human-mediated GUI handoff breaks unattended reproducibility and injects non-deterministic operator behavior. This impacts every Codex run in environments without CLI automation and invalidates clean cross-runtime comparisons.
+- **Suggestion:** Split execution modes explicitly: deterministic mode (CLI-only) and assisted mode (manual handoff, excluded from deterministic eval claims). Require a strict handoff packet format with checksums generated before human execution.
+
+### Finding 2: Frontmatter Hints Are Assumed to Map Cleanly Across Runtimes
+- **Severity:** Important
+- **Phase:** survey (primary), design (contributing)
+- **Section:** Config Layer (`runtime defaults ... from agent frontmatter hints`)
+- **Issue:** The design assumes Claude-style frontmatter hints translate consistently to Codex and Claude runtime controls.
+- **Why it matters:** Mis-mapped `temperature`/`effort` settings contaminate comparability. Every reviewer attempt can carry different effective controls while appearing policy-compliant.
+- **Suggestion:** Define a normalized runtime settings schema with an explicit adapter mapping table and validation errors for unsupported keys at `plan` time.
+
+### Finding 3: One-Time Web Capability Probe Is Assumed to Stay Valid
+- **Severity:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Partial Failure Policy; Capability preflight
+- **Issue:** The design assumes a pre-dispatch capability probe accurately represents web availability for the full run.
+- **Why it matters:** Capability can change during execution. False negatives force `partial_success` and suppress prior-art coverage; false positives trigger avoidable retries/timeouts.
+- **Suggestion:** Re-check capability per reviewer attempt (or with a short TTL), and log probe evidence (time, mechanism, result) in `events.jsonl`.
+
+### Finding 4: “2 Consecutive Skips” Lacks a Deterministic History Algorithm
+- **Severity:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Partial Failure Policy (`2 consecutive prior-art capability skips`)
+- **Issue:** The design assumes “consecutive” is computable without defining retention scope, ordering source, or lookup rules.
+- **Why it matters:** Escalation notes fire inconsistently across clones, rebases, and partial artifact retention. This breaks acceptance criterion consistency for the same topic.
+- **Suggestion:** Specify the exact algorithm: terminal runs considered, ordering key, required artifact retention, and tie-breaking behavior.
+
+### Finding 5: Markdown-Only Canonical Output Is Assumed Sufficient for Comparison
+- **Severity:** Important
+- **Phase:** calibrate (primary), design (contributing)
+- **Section:** Overview; Outputs; Migration Strategy
+- **Issue:** The design assumes markdown-only canonical output supports this increment’s comparability goals while structured canonical artifacts are deferred.
+- **Why it matters:** Machine-grade drift analysis stays manual and slow. Every cross-runtime evaluation depends on human interpretation instead of stable structured fields.
+- **Suggestion:** Add a minimal canonical metadata JSON now (verdict, reviewer completion map, capability constraints, counts) while keeping `summary.md` as the human-facing artifact.
+
+### Finding 6: `created_at` in Manifest Relies on Perfect Hash Exclusion Discipline
+- **Severity:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Determinism Controls; Data Model (`run_manifest.json`)
+- **Issue:** The design assumes implementers will always exclude wall-clock fields from `run_id` hash input even though `created_at` lives in the manifest.
+- **Why it matters:** One serialization mistake makes `run_id` nondeterministic and fails a core must-have requirement across all runs.
+- **Suggestion:** Separate hash basis from runtime metadata as distinct persisted objects, and test hash-basis determinism directly in CI.
+
+### Finding 7: Prior-Art Coverage Is Assumed Non-Blocking for Design Decisions
+- **Severity:** Important
+- **Phase:** calibrate (primary), design (contributing)
+- **Section:** Partial Failure Policy (mandatory vs optional reviewers)
+- **Issue:** The design assumes `prior-art-scout` can remain optional without changing decision quality.
+- **Why it matters:** Build-vs-buy and duplication risks remain unchallenged in every `partial_success` run with skipped prior-art, driving repeated strategic errors.
+- **Suggestion:** Add a policy trigger: when the design introduces external dependency or “novelty” claims, require prior-art evidence (reviewer success or manual appendix) before synthesis can finalize success/partial_success.
+
+## Blind Spot Check (optional — being empirically validated)
+My lens prioritizes hidden assumptions and failure blast radius. I did not deeply audit state-machine completeness, schema correctness, or test sufficiency; edge-case-prober and feasibility-skeptic should validate those dimensions.
+===== edge-case-prober =====
+# Edge Case Prober Review
+
+## Findings
+
+### Finding 1: Concurrent resume runs corrupt deterministic state
+- **Severity:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Runner Core (`resume --run-id <id>`), `run_state.json` transition model
+- **Issue:** The design defines resume semantics but does not define a run-level lock. Two operators can run `resume` on the same `run_id` at the same time, dispatch the same `pending|retryable` reviewer twice, and race on state/event writes.
+- **Why it matters:** This breaks determinism, duplicates reviewer artifacts, and produces conflicting terminal statuses for one run directory.
+- **Suggestion:** Add single-writer locking per `run_id` (lock file + stale lock recovery), and enforce compare-and-swap transition writes using `run_transition_version`.
+
+### Finding 2: Filesystem write failures leave run state inconsistent
+- **Severity:** Critical
+- **Phase:** design (primary)
+- **Section:** Atomic Synthesis, artifact persistence (`run_state.json`, `events.jsonl`, `summary.md.tmp`)
+- **Issue:** The design specifies temp-file rename for synthesis but does not define behavior for `ENOSPC`, `EIO`, or fsync failures on state/event/summary writes.
+- **Why it matters:** A disk-full or I/O fault can truncate logs or drop summary output while the run advances state, producing irrecoverable audit gaps.
+- **Suggestion:** Require durable-write protocol (write temp, fsync file, fsync dir, rename, fsync dir) for critical artifacts and force terminal `failed` on durability errors.
+
+### Finding 3: Synthesizer has no retry policy and becomes a single-point failure
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Failure Semantics, Run-Level Terminal States
+- **Issue:** Reviewer retries are defined, but synthesizer retry/error classes are not. One transient synthesizer timeout fails the entire run after successful mandatory reviews.
+- **Why it matters:** Blast radius is 100% run failure on a single flaky final step, with expensive reruns and duplicate artifacts.
+- **Suggestion:** Apply the same transient/timeout retry framework to synthesizer attempts and log synthesizer outcomes in structured records.
+
+### Finding 4: Capability checks are non-deterministic when web access flaps mid-run
+- **Severity:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Section:** Partial Failure Policy, capability preflight
+- **Issue:** The design checks capability before dispatch but does not define classification when web becomes unavailable during execution.
+- **Why it matters:** The same environmental failure is labeled differently (`failed_transient` vs `skipped_capability`), which distorts partial-success semantics and escalation tracking.
+- **Suggestion:** Define attempt-time capability classification rules and normalize no-web failures to `skipped_capability` for `prior-art-scout` regardless of preflight result.
+
+### Finding 5: “Two consecutive prior-art skips” has no stable history source
+- **Severity:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Partial Failure Policy escalation rule
+- **Issue:** The rule requires consecutive topic history, but the design does not define which runs count (replays, failed runs, deleted runs, handoff waits).
+- **Why it matters:** Escalation notes appear and disappear based on filesystem accidents, not actual reliability trends.
+- **Suggestion:** Add a deterministic topic-level history index with explicit inclusion rules (terminal runs only, exclude replays) and compute escalation from that index.
+
+### Finding 6: Fixed timeout policy fails on large artifacts
+- **Severity:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Section:** Inputs, Config Layer timeout defaults, Testing Strategy
+- **Issue:** The design uses fixed per-reviewer timeouts without input-size prechecks or adaptive policy.
+- **Why it matters:** At 10x artifact size, mandatory reviewers timeout repeatedly and runs fail predictably, eliminating degraded-but-useful operation.
+- **Suggestion:** Add input-size/token-budget preflight, adaptive timeout bands, and explicit “input too large” terminal classification before reviewer dispatch.
+
+### Finding 7: Empty or malformed input files pass plan-time validation
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** `plan` command validation and input snapshotting
+- **Issue:** The design validates paths/hashes but does not require minimum semantic validity (non-empty content, expected markdown structure).
+- **Why it matters:** The runner executes successfully on empty evidence, producing authoritative-looking but invalid summaries.
+- **Suggestion:** Add plan-time semantic guards (non-empty, parseable markdown, required top-level sections) and fail fast with validation error.
+
+### Finding 8: Manual handoff path should be removed from deterministic v1 scope
+- **Severity:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Section:** Adapter Layer (`codex_app_handoff_adapter`), Run status `waiting_for_handoff`
+- **Issue:** This component introduces unbounded waiting and human timing variance into a runner whose primary objective is deterministic replayability.
+- **Why it matters:** Runs accumulate in non-terminal states and contaminate cross-runtime comparability with operator-driven variance.
+- **Suggestion:** For deterministic v1, delete manual handoff from default path and keep it behind an explicit experimental mode with TTL, cancel semantics, and separate comparability labeling.
+
+## Blind Spot Check (optional — being empirically validated)
+I focused on operational failure paths and boundary handling. I did not deeply evaluate whether phase taxonomy and finding schema choices maximize analytical quality; Requirement Auditor and First Principles lanes cover that better.
+===== requirement-auditor =====
+# Requirement Auditor Review
+
+## Coverage Matrix
+| Requirement | Addressed? | Design Section | Notes |
+|---|---|---|---|
+| In scope: design-stage `parallax:review` only | Yes | Overview, Inputs | Scope is explicitly limited to design stage. |
+| In scope: cross-runtime support (Codex CLI, Codex GUI handoff, Claude) | Yes | Adapter Layer | `claude_adapter`, `codex_adapter`, `codex_app_handoff_adapter` are defined. |
+| In scope: deterministic identity, ordering, artifact layout | Yes | Determinism Controls, Outputs | `run_id`, stable ordering, stable serialization, fixed run directory are defined. |
+| In scope: explicit partial-failure handling (including no-web) | Yes | Partial Failure Policy, Failure Semantics | `prior-art-scout` optional + capability skip policy is explicit. |
+| In scope: markdown-first comparison this increment | Yes | Overview, Outputs | `summary.md` is canonical now; JSON outputs are deferred. |
+| Constraint: keep reviewer/synthesizer behavior intact | Yes | Overview, Migration Strategy | Design keeps current workflow semantics and prompt hashing. |
+| Constraint: preserve markdown outputs for human review | Yes | Outputs | Reviewer markdown + `summary.md` are preserved. |
+| Constraint: incremental change, no big-bang rewrite | Yes | Migration Strategy | Phased approach with deferred structured canonical outputs. |
+| Must: deterministic `run_id` from canonical manifest | Yes | Determinism Controls | `run_id` from canonical manifest hash excluding timestamps. |
+| Must: topic-agnostic `content_fingerprint` | Yes | Determinism Controls | Fingerprint is content-only and topic-agnostic. |
+| Must: snapshot hashes for design/requirements/prompts/config | Yes | Inputs, Data Model (`run_manifest.json`) | Inputs hashes, prompt hashes, and `config_hash` are present. |
+| Must: explicit run+reviewer state machine with guards | Yes | Failure Semantics, Testing Strategy | Transition rules are explicit; invalid transitions are tested. |
+| Must: structured `events.jsonl` + `reviewer_outcomes.jsonl` | Yes | Outputs, Data Model | Both logs are defined in run artifacts. |
+| Must: outcomes include effective runtime settings per attempt | Yes | Data Model (`reviewer_outcomes.jsonl`) | `effective_runtime_settings` is required per attempt. |
+| Must: resume avoids rerunning completed reviewers | Yes | Runner Core (`resume`), Testing Strategy | Resume targets non-terminal work only; test covers rerun prevention. |
+| Must: atomic summary publish | Yes | Atomic Synthesis | Temp write + validation + atomic rename are explicit. |
+| Must: terminal run statuses include `success|partial_success|failed` | Yes | Run-Level Terminal States | Required statuses are present. |
+| Must: no-web policy skips prior-art + confidence downgrade in summary | Yes | Partial Failure Policy | Capability skip and confidence downgrade are explicit. |
+| Must: bounded transient retry with backoff+jitter | Yes | Retry Policy | Attempts, backoff formula, jitter, and no-retry classes are explicit. |
+| Must: collision policy prevents clobbering | Yes | Runner Core (collision policy) | Fail-fast default + explicit replay path is defined. |
+| Should: unified runtime adapter abstraction | Yes | Adapter Layer | Single contract for reviewer execution across runtimes. |
+| Should: semantic comparison metadata section in `summary.md` (completion map, capability constraints, runtime caveats) | Partial | Overview, Partial Failure Policy | Design references semantic comparison and confidence notes, but no explicit required metadata schema/section for all three elements. |
+| Should: 2 consecutive prior-art skips trigger escalation note | Yes | Partial Failure Policy | Threshold rule and escalation note are explicit. |
+| Could: `summary.json` + `findings.jsonl` when ready | Yes | Outputs (Deferred), Migration Strategy | Explicitly deferred to later phase. |
+| Could: run comparison utility | Partial | Migration Strategy | Semantic comparison intent exists, but no concrete utility contract in this design. |
+| Could: manual handoff adapter | Yes | Adapter Layer | `codex_app_handoff_adapter` and ingest validation are defined. |
+| Could: per-reviewer override policy in config | Yes | Config Layer | Timeout/retry/runtime overrides are explicit. |
+| Won’t: full LangGraph migration this iteration | Yes | Migration Strategy | LangGraph is deferred behind an adoption gate. |
+| Won’t: evaluator/judge automation this iteration | Yes | Scope/Design coverage | Not introduced. |
+| Won’t: JSON/JSONL canonical this iteration | Yes | Overview, Outputs | Markdown remains canonical for this increment. |
+| NFR reproducibility: same manifest => same plan/order | Yes | Determinism Controls, Testing Strategy | Deterministic plan and ordering are explicitly tested. |
+| NFR reliability: deterministic non-retryable capability handling | Yes | Retry Policy, Partial Failure Policy | Capability skip is explicit and non-retryable. |
+| NFR observability: attempt + terminal outcome logs with timestamps and error class | Partial | Data Model, Failure Semantics | `error_class` is explicit; attempt-level timestamp fields are not explicitly specified in `reviewer_outcomes.jsonl`. |
+| NFR portability: same contract across Codex/Claude | Yes | Adapter Layer, Cross-runtime tests | Shared contract and cross-runtime contract tests are defined. |
+| NFR comparability: semantic comparison via `summary.md` + semantic metadata | Partial | Overview, Partial Failure Policy | `summary.md` is canonical; required semantic metadata contract is underspecified. |
+| AC8: outputs remain compatible with current workflow expectations | Partial | Outputs path choice | New root `docs/codex/reviews/...` risks breaking existing `docs/reviews/...`-based workflow assumptions unless compatibility shims are defined. |
+
+## Findings
+
+### Finding 1: Requirement Baseline Is Contradictory Across Input Artifacts
+- **Severity:** Critical
+- **Phase:** calibrate (primary), design (contributing)
+- **Section:** Canonical output format expectations across requirements vs supplemental recommendation/plan
+- **Issue:** The requirements artifact sets markdown-first canonical output for this increment and explicitly excludes JSON/JSONL as canonical now, while supplemental recommendation/plan prescribe `summary.json`/`findings.jsonl` as source-of-truth in near-term implementation.
+- **Why it matters:** The runner cannot satisfy both baselines simultaneously. This creates churn in artifact contracts, breaks eval continuity, and invalidates acceptance decisions because “done” changes depending on which document is treated as authority.
+- **Suggestion:** Freeze one authoritative increment boundary in calibration: either (a) markdown-canonical now with JSON deferred, or (b) JSON-canonical now. Then update all companion docs to that single contract before implementation.
+
+### Finding 2: Observability Contract Misses Explicit Attempt Timestamps
+- **Severity:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Data Model (`reviewer_outcomes.jsonl`), Non-Functional observability requirements
+- **Issue:** Requirement requires each reviewer attempt and terminal outcome to be logged with timestamps and error class. Design defines `error_class` and durations but does not explicitly require attempt timestamp fields in `reviewer_outcomes.jsonl`.
+- **Why it matters:** Missing attempt timestamps blocks deterministic incident reconstruction, retry auditability, and cross-runtime sequence analysis. Blast radius is every failed or retried run where timing evidence is needed.
+- **Suggestion:** Add explicit timestamp fields (`attempt_started_at`, `attempt_ended_at`, `recorded_at`) to `reviewer_outcomes.jsonl` and require timestamped terminal transition events in `events.jsonl`.
+
+### Finding 3: Semantic Comparison Metadata Is Underspecified
+- **Severity:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Overview, Partial Failure Policy, Testing Strategy
+- **Issue:** Should-have requirement calls for semantic comparison metadata in `summary.md` including reviewer completion map, capability constraints, and runtime caveats. Design references semantic comparison and partial markers but does not define a mandatory metadata section schema covering all required elements.
+- **Why it matters:** Cross-runtime comparisons will mix orchestration variance with model-content variance. Blast radius is every parity analysis and drift triage run.
+- **Suggestion:** Define a fixed `summary.md` metadata block with required keys and deterministic ordering, then add acceptance tests validating presence and render stability.
+
+### Finding 4: Output Location Change Risks Workflow Compatibility
+- **Severity:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Outputs (`docs/codex/reviews/<topic>/runs/<run_id>/`)
+- **Issue:** Acceptance requires compatibility with current workflow expectations, but design relocates outputs under `docs/codex/reviews/...` without a compatibility contract for existing `docs/reviews/...` consumers.
+- **Why it matters:** Existing tooling, scripts, and operator habits can fail immediately. Blast radius includes all downstream readers expecting legacy paths.
+- **Suggestion:** Add an explicit compatibility strategy: either keep legacy root for this increment, or generate deterministic pointers/symlinks/index files that preserve existing consumption paths.
+
+## Blind Spot Check (optional — being empirically validated)
+Requirement-focused review does not deeply validate failure-state correctness under concurrent execution, adapter implementation realism, or determinism under filesystem/process nondeterminism. Edge-case, feasibility, and first-principles lanes should pressure-test those areas.
+===== feasibility-skeptic =====
+# Feasibility Skeptic Review
+
+## Complexity Assessment
+**Overall complexity:** High  
+**Riskiest components:** `codex_app_handoff_adapter` + ingest validation path; cross-runtime adapter parity (`claude`/`codex`/GUI fallback); resume/replay state machine with atomic synthesis and collision handling  
+**Simplification opportunities:** Drop GUI handoff from v1 and ship CLI-only deterministic runner; defer consecutive-skip escalation to a reporting script; enforce single-writer lock and single runtime profile first
+
+## Findings
+
+### Finding 1: GUI handoff path creates a second orchestration system
+- **Severity:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Adapter Layer; Failure Semantics (`manual_handoff` / `waiting_for_handoff`)
+- **Issue:** The design keeps `codex_app_handoff_adapter` in the core v1 path, which introduces a human-mediated execution lane with separate ingest/validation semantics.
+- **Why it matters:** This doubles the control-plane complexity and expands the test matrix across 3 adapter modes, retries, resume, and replay. A determinism runner now depends on manual operator correctness, which is the least deterministic component and the highest schedule risk.
+- **Suggestion:** Remove GUI handoff from v1 scope and hard-fail when non-interactive CLI is unavailable. Ship deterministic contracts on `claude_adapter` and `codex_adapter` only, then add GUI handoff in a later increment behind a feature flag.
+
+### Finding 2: Cross-runtime parity is underspecified at the contract boundary
+- **Severity:** Important
+- **Phase:** survey (primary), design (contributing)
+- **Section:** Determinism Controls; Testing Strategy (cross-runtime contract tests)
+- **Issue:** The design logs `effective_runtime_settings` but does not define a normalized adapter capability contract (timeouts, tool availability model, token limits, error taxonomy mapping) that both runtimes must satisfy.
+- **Why it matters:** Runs will diverge due to adapter behavior rather than model behavior, and comparison outputs lose diagnostic value. This undermines the primary goal of separating orchestration drift from content drift.
+- **Suggestion:** Add a strict adapter capability schema in manifest/state (normalized limits, tool flags, error-class mapping, binary version/build hash). Fail `plan` when runtime contract fields are missing.
+
+### Finding 3: Consecutive skip escalation rule adds hidden historical-query complexity
+- **Severity:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Partial Failure Policy (`2 consecutive prior-art capability skips`)
+- **Issue:** The runner enforces a cross-run policy without defining canonical history lookup boundaries (replays vs primary runs, branch/worktree scope, deleted run folders, topic renames).
+- **Why it matters:** Operators will get inconsistent escalation behavior across machines and branches. The rule becomes brittle and expensive to validate, while adding little value to single-run determinism.
+- **Suggestion:** Move this rule out of run-time state transitions. Generate escalation in a separate audit/report command that scans retained primary runs only with explicit filtering rules.
+
+### Finding 4: Resume/replay safety lacks explicit single-writer concurrency control
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Runner Core (`run`, `resume`, replay paths); State Transition Rules; Atomic Synthesis
+- **Issue:** The design defines atomic file publish for synthesis but does not define a run-level lock for `run_state.json`/`events.jsonl` mutation.
+- **Why it matters:** Parallel `run`/`resume` invocations on the same `run_id` will interleave events and corrupt state progression. Blast radius is full-run invalidation and non-replayable artifacts.
+- **Suggestion:** Add mandatory lock acquisition per `run_id` (PID + hostname + stale-lock timeout) before any state/event mutation, and fail fast on lock contention.
+
+## Blind Spot Check (optional — being empirically validated)
+I optimized for delivery risk and operational simplicity. I did not deeply score finding-quality correctness, taxonomy quality, or reviewer prompt semantics; other reviewer lanes will catch those gaps.
+===== first-principles =====
+# First Principles Review
+
+## Problem Reframe
+The core problem is not “run reviewers deterministically”; it is “separate orchestration variance from model variance so cross-runtime evaluation is trustworthy.” From zero, I would define the product as an evaluation contract first (machine-readable outcomes + deterministic orchestration), then add human-readable rendering. The current design frames markdown continuity as primary and treats evaluability as a later increment, which inverts that order.
+
+## Findings
+
+### Finding 1: Canonical Markdown Solves Documentation Continuity, Not Eval Determinism
+- **Severity:** Critical
+- **Phase:** calibrate (primary), design (contributing)
+- **Section:** Overview, Outputs, Migration Strategy
+- **Issue:** The design keeps `summary.md` as canonical and defers canonical `summary.json`/`findings.jsonl`, while the stated goal is reproducible cross-runtime eval.
+- **Why it matters:** Markdown-first canon preserves human workflow but blocks deterministic machine comparison as the first-class contract. Blast radius is every run used for Codex-vs-Claude analysis, because parsing/rendering interpretation remains part of the measurement path.
+- **Suggestion:** Reframe the core deliverable as “deterministic eval artifact contract.” Make JSON/JSONL canonical now and render markdown from it in the same increment.
+
+### Finding 2: Manual GUI Handoff Inside the Deterministic Runner Preserves a Non-Deterministic Step
+- **Severity:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Adapter Layer, Handoff policy, Run-level states
+- **Issue:** `codex_app_handoff_adapter` and `waiting_for_handoff` embed human-mediated execution into the deterministic path.
+- **Why it matters:** Human handoff introduces uncontrolled latency, operator variance, and artifact timing differences into the same state machine that claims deterministic replay semantics. Blast radius is all Codex environments without CLI automation, plus any parity conclusions drawn from those runs.
+- **Suggestion:** Split concerns: keep deterministic runner fully automated-only, and move GUI handoff to a separate “manual recovery workflow” that is explicitly excluded from deterministic cross-runtime comparisons.
+
+### Finding 3: Capability Handling Is Hard-Coded to One Reviewer Instead of Modeled as a General Constraint System
+- **Severity:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Section:** Partial Failure Policy, Capability preflight
+- **Issue:** The design special-cases `prior-art-scout` no-web behavior and escalation logic instead of defining a generic capability matrix and policy engine.
+- **Why it matters:** This solves today’s known failure and locks architecture to current reviewer composition. Blast radius expands with every new capability-dependent reviewer, forcing policy rewrites and inconsistent semantics across lanes.
+- **Suggestion:** Define per-reviewer capability requirements in config and enforce one generic “capability_unavailable” policy path (status, retryability, escalation thresholds) for all reviewers.
+
+### Finding 4: Jittered Retry Timing Conflicts with the Declared Determinism Objective
+- **Severity:** Important
+- **Phase:** design (primary)
+- **Section:** Retry Policy, Determinism Controls
+- **Issue:** Retry delay includes `jitter_ms = 0..500` without a deterministic seed contract.
+- **Why it matters:** Unseeded jitter changes event timelines and attempt metadata across identical runs, weakening replay equivalence claims at the orchestration layer. Blast radius is every transient-failure run, the exact class where reproducibility matters most.
+- **Suggestion:** Use deterministic jitter derived from manifest/run hash and attempt number, or remove jitter in deterministic mode and reserve random jitter for non-eval operational mode.
+
+### Finding 5: Scope Locks on “Design Stage Only” Instead of Solving the Root Reliability Boundary
+- **Severity:** Minor
+- **Phase:** survey (primary), calibrate (contributing)
+- **Section:** Scope, Migration Strategy
+- **Issue:** The design treats stage isolation as a hard product boundary rather than a temporary rollout boundary.
+- **Why it matters:** The root reliability boundary is pipeline-level comparability, not single-stage execution. Stage-only framing postpones contract decisions that should stay stable across all stages (identity, events, terminal semantics).
+- **Suggestion:** Keep implementation rollout single-stage, but declare schemas and state semantics as pipeline-global contracts now.
+
+## Blind Spot Check (optional — being empirically validated)
+I emphasized root framing and determinism purity over delivery speed. Other reviewers will better surface practical tradeoffs like migration risk, operator ergonomics, and short-term adoption friction in existing markdown-first workflows.
+===== prior-art-scout =====
+# Prior Art Scout Review
+
+## Prior Art Landscape
+This work should exist: the repo has a real determinism gap across Codex/Claude runs, and a runner contract solves that gap. The design correctly keeps reviewer prompts intact and scopes to one stage. The missed prior art is concentrated in orchestration durability, canonicalization standards, and observability standards, where mature ecosystems already solve the hardest parts.
+
+## Findings
+
+### Finding 1: Custom Orchestration Rebuilds Durable Workflow Features
+- **Severity:** Critical
+- **Phase:** design (primary), survey (contributing)
+- **Section:** Architecture, Failure Semantics, State Transition Rules, Resume
+- **Issue:** The design implements a bespoke workflow engine (state machine, retries, resume, manual handoff, terminal policies) instead of adopting an existing durable orchestration runtime.
+- **Why it matters:** This creates permanent maintenance ownership for correctness-critical control flow. Every new stage multiplies transition edges, retry branches, and recovery states; blast radius spans all review runs and future pipeline stages.
+- **Suggestion:** Evaluate adopting a workflow runtime now for control-plane concerns while keeping current reviewer logic unchanged: Temporal (`https://docs.temporal.io/`), LangGraph (`https://langchain-ai.github.io/langgraph/`), or Prefect (`https://docs.prefect.io/`). Keep artifact schema stable and migrate execution semantics to the engine.
+
+### Finding 2: Deterministic JSON Rules Ignore Canonicalization Standard
+- **Severity:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Section:** Determinism Controls
+- **Issue:** The design defines ad hoc “sorted keys + normalized newlines” instead of a canonical JSON standard for hashing and ID generation.
+- **Why it matters:** Cross-runtime hash parity breaks when serializers differ on floats, Unicode normalization, or escaping details; blast radius is run identity drift, replay mismatch, and false regression signals.
+- **Suggestion:** Adopt RFC 8785 JSON Canonicalization Scheme (`https://www.rfc-editor.org/rfc/rfc8785`) for all hash-bearing artifacts (`run_id`, `content_fingerprint`, manifest hashes). Use one canonicalization library across runtimes and test vectors.
+
+### Finding 3: Event Logging Reinvents Telemetry Without Standard Semantics
+- **Severity:** Important
+- **Phase:** survey (primary), design (contributing)
+- **Section:** Outputs, Data Model, Testing Strategy
+- **Issue:** `events.jsonl` and `reviewer_outcomes.jsonl` define local fields but skip established observability/lineage standards.
+- **Why it matters:** Tooling interoperability is lost from day one; blast radius includes dashboards, alerting, and cross-system debugging when runs fail in CI or mixed runtimes.
+- **Suggestion:** Map runner events to OpenTelemetry spans/log attributes (`https://opentelemetry.io/docs/specs/`) and add OpenLineage-compatible run/facet fields for lineage (`https://openlineage.io/docs/`). Keep JSONL, but standardize field names and IDs.
+
+### Finding 4: Retry/Backoff Logic Is Custom Despite Mature Battle-Tested Libraries
+- **Severity:** Minor
+- **Phase:** plan (primary), design (contributing)
+- **Section:** Retry Policy, Failure Policy Engine
+- **Issue:** The design proposes custom retry scheduling and classification logic that existing reliability libraries already provide.
+- **Why it matters:** Retry bugs produce silent throughput collapse or retry storms; blast radius is all transient-failure paths across reviewers and adapters.
+- **Suggestion:** Use a proven retry library for bounded exponential backoff + jitter + stop conditions, such as Tenacity (`https://tenacity.readthedocs.io/`) or Backoff (`https://github.com/litl/backoff`), and keep policy values in config.
+
+### Finding 5: Manual Handoff Contract Misses Human-in-the-Loop Workflow Pattern Libraries
+- **Severity:** Important
+- **Phase:** design (primary), survey (contributing)
+- **Section:** Adapter Layer, `codex_app_handoff_adapter`, waiting_for_handoff state
+- **Issue:** The handoff path defines a custom ingest/validation protocol instead of using a standard human-in-the-loop workflow primitive.
+- **Why it matters:** Human handoff becomes the least reliable branch and hardest to audit; blast radius is blocked runs, invalid artifact ingestion, and irreproducible resume behavior.
+- **Suggestion:** Model handoff as explicit workflow signals/checkpoints using existing HITL primitives in orchestration tools (Temporal signals/queries: `https://docs.temporal.io/workflows`, LangGraph interrupts/checkpoints: `https://langchain-ai.github.io/langgraph/`). Preserve current artifact files as workflow payloads.
+
+## Blind Spot Check (optional — being empirically validated)
+The design is right to keep custom domain logic for reviewer semantics, partial-success policy, and parallax-specific confidence downgrade language. Those are product-specific and should remain custom. The non-differentiated infrastructure pieces (durable orchestration mechanics, canonicalization, telemetry semantics, retry plumbing) should be leveraged from existing standards and tooling.
+mcp startup: no servers
+2026-02-16T04:32:02.725320Z ERROR codex_core::rollout::list: state db missing rollout path for thread 019c64ad-1495-7d03-a981-14e2591f922d
+2026-02-16T04:32:02.725570Z  WARN codex_core::state_db: state db record_discrepancy: find_thread_path_by_id_str_in_subdir, falling_back
+2026-02-16T04:32:02.749592Z ERROR codex_core::rollout::list: state db missing rollout path for thread 019c647c-7341-77e1-8065-26150a1e84c6
+2026-02-16T04:32:02.749632Z  WARN codex_core::state_db: state db record_discrepancy: find_thread_path_by_id_str_in_subdir, falling_back
+2026-02-16T04:32:02.773603Z ERROR codex_core::rollout::list: state db missing rollout path for thread 019c6457-f013-76d3-9ed3-180d250b58ea
+2026-02-16T04:32:02.773633Z  WARN codex_core::state_db: state db record_discrepancy: find_thread_path_by_id_str_in_subdir, falling_back
+
+thinking
+**Scoping final summary content**
+codex
+# Review Summary: deterministic-runner-smoke-v3
+
+**Date:** 2026-02-16  
+**Design:** /Users/nic/src/design-parallax/parallax/docs/codex/plans/2026-02-16-deterministic-runner-design.md  
+**Requirements:** /Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-requirements.md  
+**Stage:** design  
+**Verdict:** escalate
+
+## Verdict Reasoning
+Escalation is required mechanically because critical findings include upstream calibration gaps (canonical output baseline conflict). There are also multiple critical design flaws that block deterministic/reproducible operation (manual handoff in deterministic path, concurrency safety, durability, observability timestamps, orchestration control-plane risk). A different verdict would require first resolving upstream contract contradictions, then revising the design to close determinism and reliability gaps.
+
+## Finding Counts
+- Critical: 7
+- Important: 11
+- Minor: 2
+- Contradictions: 0
+
+## Findings by Phase
+- Survey gaps: 3
+- Calibrate gaps: 2
+- Design flaws: 14
+- Plan concerns: 1
+
+Systemic issue detected — consider escalating to `plan` (contributing phase appears in >30% of findings, mainly as missing deterministic operational rules/tests for transitions, history lookup, retries, and durability).
+
+## Auto-Fixable Findings
+None.
+
+## Critical Findings
+
+### Manual Handoff Embedded in Deterministic Path
+- **Severity:** Critical
+- **Severity range:** Critical (Assumption Hunter, Feasibility Skeptic, First Principles) to Important (Edge Case Prober, Prior Art Scout)
+- **Phase:** design (primary), calibrate (contributing)
+- **Flagged by:** assumption-hunter, edge-case-prober, feasibility-skeptic, first-principles, prior-art-scout
+- **Section:** Adapter Layer; Handoff policy; `codex_app_handoff_adapter`; `waiting_for_handoff`
+- **Issue:** Human-mediated GUI handoff is inside the deterministic runner path.
+- **Why it matters:** It introduces operator variance, unbounded waiting, and non-replayable behavior into the core deterministic contract.
+- **Suggestion:** Split modes (deterministic automated-only vs assisted/manual), or remove GUI handoff from v1 deterministic scope; if retained, require strict handoff packet validation, TTL/cancel semantics, and explicit exclusion from deterministic comparability claims.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Canonical Output Contract Is Upstream-Inconsistent
+- **Severity:** Critical
+- **Severity range:** Critical (Requirement Auditor, First Principles) to Important (Assumption Hunter)
+- **Phase:** calibrate (primary), design (contributing)
+- **Flagged by:** requirement-auditor, first-principles, assumption-hunter
+- **Section:** Overview; Outputs; Migration Strategy; requirements/supplemental baseline
+- **Issue:** The increment boundary is contradictory: markdown-first canon vs near-term JSON/JSONL source-of-truth expectations.
+- **Why it matters:** Acceptance criteria and artifact contracts conflict, causing churn and invalid “done” decisions.
+- **Suggestion:** Freeze one authoritative canonical contract for this increment, then align all companion docs and tests; if markdown remains canonical, define mandatory semantic metadata now.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### `run_id` Hash Basis Can Be Polluted by Runtime Metadata
+- **Severity:** Critical
+- **Severity range:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** assumption-hunter
+- **Section:** Determinism Controls; `run_manifest.json` (`created_at`)
+- **Issue:** Wall-clock fields co-located with hash-relevant fields can leak into hash input through implementation mistakes.
+- **Why it matters:** A single serialization error breaks deterministic identity.
+- **Suggestion:** Persist hash basis separately from runtime metadata and add CI tests asserting hash determinism.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Missing Single-Writer Concurrency Control for `resume`/state mutation
+- **Severity:** Critical
+- **Severity range:** Critical (Edge Case Prober) to Important (Feasibility Skeptic)
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** edge-case-prober, feasibility-skeptic
+- **Section:** Runner Core (`resume`), `run_state.json` transitions, event writes
+- **Issue:** No run-level lock/CAS semantics are defined.
+- **Why it matters:** Concurrent resumes can duplicate dispatches and corrupt deterministic state.
+- **Suggestion:** Add mandatory per-run lock with stale-lock recovery and compare-and-swap transition versioning.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Durability Protocol Is Incomplete for I/O Faults
+- **Severity:** Critical
+- **Severity range:** Critical
+- **Phase:** design (primary)
+- **Flagged by:** edge-case-prober
+- **Section:** Atomic Synthesis; artifact persistence (`run_state.json`, `events.jsonl`, summaries)
+- **Issue:** ENOSPC/EIO/fsync failure handling is not fully specified for critical writes.
+- **Why it matters:** State can advance while logs/summaries are truncated or missing, breaking auditability/recovery.
+- **Suggestion:** Define durable-write sequence (temp write, fsync file/dir, rename, fsync dir) and force terminal failure on durability errors.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Attempt-Level Timestamp Contract Missing in Outcomes
+- **Severity:** Critical
+- **Severity range:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** requirement-auditor
+- **Section:** Data Model (`reviewer_outcomes.jsonl`), observability NFR
+- **Issue:** Attempt timestamps are not explicitly required, despite NFR requiring timestamped attempt and terminal records.
+- **Why it matters:** Incident reconstruction and retry audit trails are incomplete.
+- **Suggestion:** Add explicit attempt/record timestamps in outcomes and timestamped terminal transition events.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Bespoke Durable Orchestration Reimplements Existing Control-Plane
+- **Severity:** Critical
+- **Severity range:** Critical
+- **Phase:** design (primary), survey (contributing)
+- **Flagged by:** prior-art-scout
+- **Section:** Architecture; failure semantics; resume/state machine
+- **Issue:** The design builds custom durable orchestration instead of leveraging mature workflow runtimes.
+- **Why it matters:** Long-term correctness/maintenance burden grows with every stage and policy branch.
+- **Suggestion:** Evaluate adopting a workflow runtime for control-plane durability while preserving current reviewer domain logic and artifact contracts.
+- **Fixability:** human-decision
+- **Status:** pending
+
+## Important Findings
+
+### Consecutive Prior-Art Skip Escalation Rule Lacks Deterministic History Source
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** assumption-hunter, edge-case-prober, feasibility-skeptic
+- **Section:** Partial Failure Policy (`2 consecutive prior-art capability skips`)
+- **Issue:** “Consecutive” is not backed by explicit inclusion/exclusion and ordering rules.
+- **Why it matters:** Escalation notes become filesystem/history dependent and inconsistent across environments.
+- **Suggestion:** Define a deterministic history index and rules (which runs count, ordering key, replay/deletion handling), or move escalation to an explicit reporting command.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Capability Policy Is Not Stable Under Mid-Run Changes
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Flagged by:** assumption-hunter, edge-case-prober, first-principles
+- **Section:** Capability preflight; Partial Failure Policy
+- **Issue:** One-time preflight and special-cased handling do not define deterministic classification when capability changes during execution.
+- **Why it matters:** Identical environmental failures can be labeled differently, distorting partial-success semantics/comparisons.
+- **Suggestion:** Re-check with defined TTL or per-attempt checks, log probe evidence, and use a generic per-reviewer capability matrix with normalized classification rules.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Synthesizer Retry Semantics Are Missing
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary)
+- **Flagged by:** edge-case-prober
+- **Section:** Failure Semantics; terminal status handling
+- **Issue:** Reviewer retries exist, but synthesizer retry/error classes are undefined.
+- **Why it matters:** A transient final-step failure can fail the entire run despite successful mandatory reviews.
+- **Suggestion:** Add bounded retries/error taxonomy for synthesizer attempts and structured outcome logging.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Fixed Timeout Policy Fails at Large Input Sizes
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Flagged by:** edge-case-prober
+- **Section:** Config timeout defaults; testing strategy
+- **Issue:** Fixed per-reviewer timeout lacks size-aware/adaptive behavior.
+- **Why it matters:** Large artifacts can induce deterministic mass timeouts and run failure.
+- **Suggestion:** Add input-size/token-budget preflight, adaptive timeout bands, and explicit oversized-input classification.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Plan Validation Does Not Enforce Semantic Input Validity
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary)
+- **Flagged by:** edge-case-prober
+- **Section:** `plan` validation and input snapshotting
+- **Issue:** Path/hash checks do not prevent empty/malformed markdown inputs.
+- **Why it matters:** The system can produce authoritative-looking summaries from invalid evidence.
+- **Suggestion:** Add non-empty/parseable/required-section semantic guards at plan time.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Cross-Runtime Settings/Capabilities Mapping Is Underspecified
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** survey (primary), design (contributing)
+- **Flagged by:** assumption-hunter, feasibility-skeptic
+- **Section:** Config Layer; adapter contract
+- **Issue:** Frontmatter/runtime hint mapping and normalized capability contract are not explicit.
+- **Why it matters:** Apparent policy parity can hide true control differences across runtimes.
+- **Suggestion:** Define normalized runtime schema and adapter mapping table (timeouts, limits, tool flags, error taxonomy), with plan-time validation/failures for unsupported keys.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Prior-Art Optionality Can Undermine Decision Quality
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** calibrate (primary), design (contributing)
+- **Flagged by:** assumption-hunter
+- **Section:** Partial Failure Policy (mandatory vs optional reviewers)
+- **Issue:** `prior-art-scout` optionality has no policy gate for novelty/external-dependency decisions.
+- **Why it matters:** Build-vs-buy and duplication risks can pass unchallenged in partial runs.
+- **Suggestion:** Require prior-art evidence (reviewer success or manual appendix) for dependency/novelty-sensitive decisions before final success classification.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Semantic Comparison Metadata in `summary.md` Is Underspecified
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** requirement-auditor
+- **Section:** Overview; Partial Failure Policy; testing strategy
+- **Issue:** Required semantic metadata keys/ordering are not defined as a mandatory schema.
+- **Why it matters:** Cross-runtime comparison cannot cleanly separate orchestration variance from model variance.
+- **Suggestion:** Define a fixed metadata block schema with deterministic ordering and acceptance tests.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Output Path Migration Risks Backward Compatibility
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** requirement-auditor
+- **Section:** Outputs (`docs/codex/reviews/...`)
+- **Issue:** New output root may break existing `docs/reviews/...` consumers without compatibility contract.
+- **Why it matters:** Existing scripts/workflows can fail immediately.
+- **Suggestion:** Keep legacy path this increment or provide deterministic compatibility pointers/indexes/symlinks.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Random Jitter Conflicts with Determinism Claims
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary)
+- **Flagged by:** first-principles
+- **Section:** Retry Policy; Determinism Controls
+- **Issue:** Jitter is random without deterministic seed contract.
+- **Why it matters:** Retry timelines differ across identical runs in exactly the transient-failure scenarios under analysis.
+- **Suggestion:** Derive jitter deterministically from run hash + attempt number, or disable random jitter in deterministic mode.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Hash Canonicalization Is Ad Hoc Instead of Standardized
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** prior-art-scout
+- **Section:** Determinism Controls
+- **Issue:** Sorted-keys/newline normalization is not a full canonicalization standard.
+- **Why it matters:** Cross-runtime serializer differences can cause identity/hash drift.
+- **Suggestion:** Adopt a canonical JSON standard for all hash-bearing artifacts with cross-runtime test vectors.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Event/Outcome Schema Misses Interoperability Standards
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** survey (primary), design (contributing)
+- **Flagged by:** prior-art-scout
+- **Section:** Outputs; Data Model
+- **Issue:** Local telemetry schema omits established observability/lineage semantics.
+- **Why it matters:** Reduced interoperability with diagnostics, dashboards, and lineage tooling.
+- **Suggestion:** Keep JSONL but align key fields/IDs to standard telemetry and lineage conventions.
+- **Fixability:** human-decision
+- **Status:** pending
+
+## Minor Findings
+
+### Stage Framing Is Too Narrow for Pipeline-Level Reliability Contract
+- **Severity:** Minor
+- **Severity range:** Minor
+- **Phase:** survey (primary), calibrate (contributing)
+- **Flagged by:** first-principles
+- **Section:** Scope; Migration Strategy
+- **Issue:** “Design stage only” framing risks postponing pipeline-global contract decisions.
+- **Why it matters:** Later stages may inherit unstable identity/event/status semantics.
+- **Suggestion:** Keep rollout single-stage, but declare schemas/state semantics as pipeline-global now.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Retry Plumbing May Be Better Leveraged Than Built
+- **Severity:** Minor
+- **Severity range:** Minor
+- **Phase:** plan (primary), design (contributing)
+- **Flagged by:** prior-art-scout
+- **Section:** Retry Policy; Failure Policy Engine
+- **Issue:** Custom retry implementation duplicates mature reliability libraries.
+- **Why it matters:** Increased maintenance and bug surface in transient-failure paths.
+- **Suggestion:** Use a proven retry library while keeping policy values/config local.
+- **Fixability:** human-decision
+- **Status:** pending
+
+## Contradictions
+No direct reviewer-to-reviewer contradictions were identified. Reviewers were largely aligned on direction (manual handoff isolation/removal from deterministic path, stronger deterministic contracts, and tighter durability/observability rules).
+tokens used
+16,664
+# Review Summary: deterministic-runner-smoke-v3
+
+**Date:** 2026-02-16  
+**Design:** /Users/nic/src/design-parallax/parallax/docs/codex/plans/2026-02-16-deterministic-runner-design.md  
+**Requirements:** /Users/nic/src/design-parallax/parallax/docs/codex/2026-02-16-deterministic-runner-requirements.md  
+**Stage:** design  
+**Verdict:** escalate
+
+## Verdict Reasoning
+Escalation is required mechanically because critical findings include upstream calibration gaps (canonical output baseline conflict). There are also multiple critical design flaws that block deterministic/reproducible operation (manual handoff in deterministic path, concurrency safety, durability, observability timestamps, orchestration control-plane risk). A different verdict would require first resolving upstream contract contradictions, then revising the design to close determinism and reliability gaps.
+
+## Finding Counts
+- Critical: 7
+- Important: 11
+- Minor: 2
+- Contradictions: 0
+
+## Findings by Phase
+- Survey gaps: 3
+- Calibrate gaps: 2
+- Design flaws: 14
+- Plan concerns: 1
+
+Systemic issue detected — consider escalating to `plan` (contributing phase appears in >30% of findings, mainly as missing deterministic operational rules/tests for transitions, history lookup, retries, and durability).
+
+## Auto-Fixable Findings
+None.
+
+## Critical Findings
+
+### Manual Handoff Embedded in Deterministic Path
+- **Severity:** Critical
+- **Severity range:** Critical (Assumption Hunter, Feasibility Skeptic, First Principles) to Important (Edge Case Prober, Prior Art Scout)
+- **Phase:** design (primary), calibrate (contributing)
+- **Flagged by:** assumption-hunter, edge-case-prober, feasibility-skeptic, first-principles, prior-art-scout
+- **Section:** Adapter Layer; Handoff policy; `codex_app_handoff_adapter`; `waiting_for_handoff`
+- **Issue:** Human-mediated GUI handoff is inside the deterministic runner path.
+- **Why it matters:** It introduces operator variance, unbounded waiting, and non-replayable behavior into the core deterministic contract.
+- **Suggestion:** Split modes (deterministic automated-only vs assisted/manual), or remove GUI handoff from v1 deterministic scope; if retained, require strict handoff packet validation, TTL/cancel semantics, and explicit exclusion from deterministic comparability claims.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Canonical Output Contract Is Upstream-Inconsistent
+- **Severity:** Critical
+- **Severity range:** Critical (Requirement Auditor, First Principles) to Important (Assumption Hunter)
+- **Phase:** calibrate (primary), design (contributing)
+- **Flagged by:** requirement-auditor, first-principles, assumption-hunter
+- **Section:** Overview; Outputs; Migration Strategy; requirements/supplemental baseline
+- **Issue:** The increment boundary is contradictory: markdown-first canon vs near-term JSON/JSONL source-of-truth expectations.
+- **Why it matters:** Acceptance criteria and artifact contracts conflict, causing churn and invalid “done” decisions.
+- **Suggestion:** Freeze one authoritative canonical contract for this increment, then align all companion docs and tests; if markdown remains canonical, define mandatory semantic metadata now.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### `run_id` Hash Basis Can Be Polluted by Runtime Metadata
+- **Severity:** Critical
+- **Severity range:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** assumption-hunter
+- **Section:** Determinism Controls; `run_manifest.json` (`created_at`)
+- **Issue:** Wall-clock fields co-located with hash-relevant fields can leak into hash input through implementation mistakes.
+- **Why it matters:** A single serialization error breaks deterministic identity.
+- **Suggestion:** Persist hash basis separately from runtime metadata and add CI tests asserting hash determinism.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Missing Single-Writer Concurrency Control for `resume`/state mutation
+- **Severity:** Critical
+- **Severity range:** Critical (Edge Case Prober) to Important (Feasibility Skeptic)
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** edge-case-prober, feasibility-skeptic
+- **Section:** Runner Core (`resume`), `run_state.json` transitions, event writes
+- **Issue:** No run-level lock/CAS semantics are defined.
+- **Why it matters:** Concurrent resumes can duplicate dispatches and corrupt deterministic state.
+- **Suggestion:** Add mandatory per-run lock with stale-lock recovery and compare-and-swap transition versioning.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Durability Protocol Is Incomplete for I/O Faults
+- **Severity:** Critical
+- **Severity range:** Critical
+- **Phase:** design (primary)
+- **Flagged by:** edge-case-prober
+- **Section:** Atomic Synthesis; artifact persistence (`run_state.json`, `events.jsonl`, summaries)
+- **Issue:** ENOSPC/EIO/fsync failure handling is not fully specified for critical writes.
+- **Why it matters:** State can advance while logs/summaries are truncated or missing, breaking auditability/recovery.
+- **Suggestion:** Define durable-write sequence (temp write, fsync file/dir, rename, fsync dir) and force terminal failure on durability errors.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Attempt-Level Timestamp Contract Missing in Outcomes
+- **Severity:** Critical
+- **Severity range:** Critical
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** requirement-auditor
+- **Section:** Data Model (`reviewer_outcomes.jsonl`), observability NFR
+- **Issue:** Attempt timestamps are not explicitly required, despite NFR requiring timestamped attempt and terminal records.
+- **Why it matters:** Incident reconstruction and retry audit trails are incomplete.
+- **Suggestion:** Add explicit attempt/record timestamps in outcomes and timestamped terminal transition events.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Bespoke Durable Orchestration Reimplements Existing Control-Plane
+- **Severity:** Critical
+- **Severity range:** Critical
+- **Phase:** design (primary), survey (contributing)
+- **Flagged by:** prior-art-scout
+- **Section:** Architecture; failure semantics; resume/state machine
+- **Issue:** The design builds custom durable orchestration instead of leveraging mature workflow runtimes.
+- **Why it matters:** Long-term correctness/maintenance burden grows with every stage and policy branch.
+- **Suggestion:** Evaluate adopting a workflow runtime for control-plane durability while preserving current reviewer domain logic and artifact contracts.
+- **Fixability:** human-decision
+- **Status:** pending
+
+## Important Findings
+
+### Consecutive Prior-Art Skip Escalation Rule Lacks Deterministic History Source
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** assumption-hunter, edge-case-prober, feasibility-skeptic
+- **Section:** Partial Failure Policy (`2 consecutive prior-art capability skips`)
+- **Issue:** “Consecutive” is not backed by explicit inclusion/exclusion and ordering rules.
+- **Why it matters:** Escalation notes become filesystem/history dependent and inconsistent across environments.
+- **Suggestion:** Define a deterministic history index and rules (which runs count, ordering key, replay/deletion handling), or move escalation to an explicit reporting command.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Capability Policy Is Not Stable Under Mid-Run Changes
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Flagged by:** assumption-hunter, edge-case-prober, first-principles
+- **Section:** Capability preflight; Partial Failure Policy
+- **Issue:** One-time preflight and special-cased handling do not define deterministic classification when capability changes during execution.
+- **Why it matters:** Identical environmental failures can be labeled differently, distorting partial-success semantics/comparisons.
+- **Suggestion:** Re-check with defined TTL or per-attempt checks, log probe evidence, and use a generic per-reviewer capability matrix with normalized classification rules.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Synthesizer Retry Semantics Are Missing
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary)
+- **Flagged by:** edge-case-prober
+- **Section:** Failure Semantics; terminal status handling
+- **Issue:** Reviewer retries exist, but synthesizer retry/error classes are undefined.
+- **Why it matters:** A transient final-step failure can fail the entire run despite successful mandatory reviews.
+- **Suggestion:** Add bounded retries/error taxonomy for synthesizer attempts and structured outcome logging.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Fixed Timeout Policy Fails at Large Input Sizes
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), calibrate (contributing)
+- **Flagged by:** edge-case-prober
+- **Section:** Config timeout defaults; testing strategy
+- **Issue:** Fixed per-reviewer timeout lacks size-aware/adaptive behavior.
+- **Why it matters:** Large artifacts can induce deterministic mass timeouts and run failure.
+- **Suggestion:** Add input-size/token-budget preflight, adaptive timeout bands, and explicit oversized-input classification.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Plan Validation Does Not Enforce Semantic Input Validity
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary)
+- **Flagged by:** edge-case-prober
+- **Section:** `plan` validation and input snapshotting
+- **Issue:** Path/hash checks do not prevent empty/malformed markdown inputs.
+- **Why it matters:** The system can produce authoritative-looking summaries from invalid evidence.
+- **Suggestion:** Add non-empty/parseable/required-section semantic guards at plan time.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Cross-Runtime Settings/Capabilities Mapping Is Underspecified
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** survey (primary), design (contributing)
+- **Flagged by:** assumption-hunter, feasibility-skeptic
+- **Section:** Config Layer; adapter contract
+- **Issue:** Frontmatter/runtime hint mapping and normalized capability contract are not explicit.
+- **Why it matters:** Apparent policy parity can hide true control differences across runtimes.
+- **Suggestion:** Define normalized runtime schema and adapter mapping table (timeouts, limits, tool flags, error taxonomy), with plan-time validation/failures for unsupported keys.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Prior-Art Optionality Can Undermine Decision Quality
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** calibrate (primary), design (contributing)
+- **Flagged by:** assumption-hunter
+- **Section:** Partial Failure Policy (mandatory vs optional reviewers)
+- **Issue:** `prior-art-scout` optionality has no policy gate for novelty/external-dependency decisions.
+- **Why it matters:** Build-vs-buy and duplication risks can pass unchallenged in partial runs.
+- **Suggestion:** Require prior-art evidence (reviewer success or manual appendix) for dependency/novelty-sensitive decisions before final success classification.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Semantic Comparison Metadata in `summary.md` Is Underspecified
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** requirement-auditor
+- **Section:** Overview; Partial Failure Policy; testing strategy
+- **Issue:** Required semantic metadata keys/ordering are not defined as a mandatory schema.
+- **Why it matters:** Cross-runtime comparison cannot cleanly separate orchestration variance from model variance.
+- **Suggestion:** Define a fixed metadata block schema with deterministic ordering and acceptance tests.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Output Path Migration Risks Backward Compatibility
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** requirement-auditor
+- **Section:** Outputs (`docs/codex/reviews/...`)
+- **Issue:** New output root may break existing `docs/reviews/...` consumers without compatibility contract.
+- **Why it matters:** Existing scripts/workflows can fail immediately.
+- **Suggestion:** Keep legacy path this increment or provide deterministic compatibility pointers/indexes/symlinks.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Random Jitter Conflicts with Determinism Claims
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary)
+- **Flagged by:** first-principles
+- **Section:** Retry Policy; Determinism Controls
+- **Issue:** Jitter is random without deterministic seed contract.
+- **Why it matters:** Retry timelines differ across identical runs in exactly the transient-failure scenarios under analysis.
+- **Suggestion:** Derive jitter deterministically from run hash + attempt number, or disable random jitter in deterministic mode.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Hash Canonicalization Is Ad Hoc Instead of Standardized
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** design (primary), plan (contributing)
+- **Flagged by:** prior-art-scout
+- **Section:** Determinism Controls
+- **Issue:** Sorted-keys/newline normalization is not a full canonicalization standard.
+- **Why it matters:** Cross-runtime serializer differences can cause identity/hash drift.
+- **Suggestion:** Adopt a canonical JSON standard for all hash-bearing artifacts with cross-runtime test vectors.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Event/Outcome Schema Misses Interoperability Standards
+- **Severity:** Important
+- **Severity range:** Important
+- **Phase:** survey (primary), design (contributing)
+- **Flagged by:** prior-art-scout
+- **Section:** Outputs; Data Model
+- **Issue:** Local telemetry schema omits established observability/lineage semantics.
+- **Why it matters:** Reduced interoperability with diagnostics, dashboards, and lineage tooling.
+- **Suggestion:** Keep JSONL but align key fields/IDs to standard telemetry and lineage conventions.
+- **Fixability:** human-decision
+- **Status:** pending
+
+## Minor Findings
+
+### Stage Framing Is Too Narrow for Pipeline-Level Reliability Contract
+- **Severity:** Minor
+- **Severity range:** Minor
+- **Phase:** survey (primary), calibrate (contributing)
+- **Flagged by:** first-principles
+- **Section:** Scope; Migration Strategy
+- **Issue:** “Design stage only” framing risks postponing pipeline-global contract decisions.
+- **Why it matters:** Later stages may inherit unstable identity/event/status semantics.
+- **Suggestion:** Keep rollout single-stage, but declare schemas/state semantics as pipeline-global now.
+- **Fixability:** human-decision
+- **Status:** pending
+
+### Retry Plumbing May Be Better Leveraged Than Built
+- **Severity:** Minor
+- **Severity range:** Minor
+- **Phase:** plan (primary), design (contributing)
+- **Flagged by:** prior-art-scout
+- **Section:** Retry Policy; Failure Policy Engine
+- **Issue:** Custom retry implementation duplicates mature reliability libraries.
+- **Why it matters:** Increased maintenance and bug surface in transient-failure paths.
+- **Suggestion:** Use a proven retry library while keeping policy values/config local.
+- **Fixability:** human-decision
+- **Status:** pending
+
+## Contradictions
+No direct reviewer-to-reviewer contradictions were identified. Reviewers were largely aligned on direction (manual handoff isolation/removal from deterministic path, stronger deterministic contracts, and tighter durability/observability rules).
