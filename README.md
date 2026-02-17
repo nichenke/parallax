@@ -2,15 +2,13 @@
 
 **Design looks different depending on where you stand. Parallax makes you look from everywhere.**
 
-An adversarial multi-perspective design review framework for Claude Code.
+An adversarial multi-perspective design review framework for Claude Code and Codex.
 
 ---
 
 It's Thursday afternoon. Instead of pushing your design straight to implementation, you run the tool. Seven minutes later, you're staring at a report that makes your stomach drop — in the best possible way. The Assumption Hunter found three places where you assumed exactly-once delivery but your message broker guarantees at-least-once. The Edge Case Prober identified a race condition in your cache invalidation only visible under concurrent writes from two regions. The Feasibility Skeptic noted that your "simple migration" requires a table lock on a 400M-row table during a zero-downtime deploy. Six Critical findings. You would have discovered every one of them in production, three weeks from now, under pressure, with customers waiting.
 
 You address the six findings, re-run, watch the count drop to zero. When Monday comes, you're not hoping the design holds — you know it holds. The ambush already happened, and you won.
-
-Every engineer has blind spots — assumptions so deeply held they're invisible, edge cases where your experience is thinnest, prior art from a stack you never worked in. Parallax doesn't replace your judgment. It arms your judgment with everything it was missing.
 
 ---
 
