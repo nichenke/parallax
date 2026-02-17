@@ -1,0 +1,17 @@
+{
+  "source_review": "inspect-ai-integration-v2-requirements-light",
+  "design_doc_path": "docs/requirements/inspect-ai-integration-requirements-v2.md",
+  "design_doc_branch": "feat/inspect-ai-integration-design",
+  "design_doc_hash": "e0930d4615ef53b7ca32468ac30cf5608398e6790ef4ce8da2df162967721e90",
+  "review_date": "2026-02-17",
+  "validation_date": "2026-02-17",
+  "validator": "nic",
+  "total_findings": 9,
+  "real_flaw_count": 6,
+  "false_positive_count": 3,
+  "false_positive_rate": 0.33,
+  "severity_distribution": {"Critical": 6, "Important": 0, "Minor": 0},
+  "skill_version": "requirements-light-v1",
+  "doc_state": "pre-fix",
+  "notes": "Ground truth captured from requirements-v2 BEFORE fixing the 6 real Critical findings. Use this dataset to verify reviewers can detect these gaps. Constraint-finder Critical findings (Python/Inspect AI version pins) are quality failures — implementation details incorrectly flagged as requirements gaps, excluded from this dataset (see Issue #57, #58). After doc fixes, generate new ground truth from fresh review."
+}

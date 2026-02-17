@@ -17,11 +17,13 @@ Five additional gaps discovered during implementation are addressed in this docu
 
 ---
 
-## Problem Statement (unchanged from v1)
+## Problem Statement
 
 Parallax skills are developed iteratively with no systematic way to measure effectiveness. Changes to skill prompts may improve, degrade, or have no effect on finding quality — we cannot tell which. This blocks empirical improvement and risks shipping broken skills.
 
-**v2 addition:** The eval framework itself must be testable at the component level. The unit of testing is the individual reviewer agent (assumption-hunter, scope-guardian, etc.), not the full orchestration skill.
+**v1 failure and what it revealed:** v1 implementation assumed the parallax skill could be loaded directly as an eval system prompt. This failed because parallax skills are orchestration workflows — they ask interactive questions, dispatch parallel agents, and write findings to disk. A single-turn eval context provides none of these affordances. The result was 102 tokens of interactive prompts and 0 findings parsed (accuracy 0.000). The root cause was a wrong mental model of the testable unit: the skill is not the unit under test, the individual reviewer agent is.
+
+**v2 addresses this** by making the testable unit explicit: each reviewer agent is evaluated independently in a single-turn context. The orchestration layer is a separate test concern (Phase 3, agent bridge).
 
 ---
 
@@ -44,7 +46,14 @@ Per-reviewer tasks provide:
 - Granular regression detection: if assumption-hunter degrades, which specific task fails?
 - Prompt tuning: A/B test individual agent prompts without noise from other agents
 
+**Phase 1 scope — agents covered:**
+Phase 1 covers the five context-independent requirements reviewers: assumption-hunter, scope-guardian, problem-framer, constraint-finder, success-validator. All five can evaluate a document from its content alone — no external lookups required. Agents that require external reference material (e.g., prior-art-scout, which needs web search or reference docs) are deferred to Phase 3 (agent bridge / multi-document eval design).
+
+**Prerequisite — agent file audit:**
+Before implementing `reviewer_eval.py`, audit all 5 reviewer agent files against FR-ARCH-2 criteria. Log any compliance gaps. Agent files may be updated to add eval-compatible language; the constraint is no eval-specific conditional logic in the file.
+
 **Acceptance Criteria:**
+- Agent file audit complete and logged before implementation begins
 - `evals/reviewer_eval.py` contains one `@task` function per reviewer agent
 - Each task uses `system_message(load_agent_content(agent_name))` as the solver
 - Each task filters ground truth to findings where `reviewer == agent_name`
@@ -170,19 +179,43 @@ Per-reviewer tasks provide:
 
 ---
 
+## Detection Targets by Phase
+
+| Phase | Recall target | Precision target | Quality score |
+|-------|--------------|-----------------|---------------|
+| **1** | ≥50% combined across all reviewer tasks | Any (not yet optimizing) | Not measured |
+| **2** | ≥90% per reviewer | ≥80% per reviewer | ≥3.5/5.0 avg |
+
+**Phase 1 target rationale:** 50% combined recall confirms the architecture is correct and findings are being parsed. It is a floor, not a goal — expect variance per reviewer given N≈2 ground truth findings each. The 90%/80% v1 thresholds are Phase 2 targets, restored once the quality rubric (FR-QUALITY-1) is in place.
+
+---
+
 ## MVP Phase Map (updated from v1)
 
 | Phase | What | Blocking issue | Status |
 |-------|------|----------------|--------|
 | **0** | Establish ground truth (human validation) | Circular dependency | ✅ Complete (requirements-light dataset) |
 | **1** | Per-reviewer eval tasks, JSONL output fix, detection baseline | Output format alignment (FR-ARCH-1, FR-ARCH-3) | In progress |
-| **1.5** | Multi-model comparison (Sonnet vs Haiku), cost tracking | Google account, cost budget spec (FR-ARCH-5) | Not started |
 | **2** | LLM-as-judge quality scoring, mock tools (Tier 2) | Quality rubric definition (FR-QUALITY-1) | Not started |
 | **2.5** | Multi-model LLM grading, synthesis eval | Multi-model + Phase 2 stable | Not started |
 | **3** | Agent bridge / inspect_swe (system-level runtime testing) | Phase 1–2 stable | Not started |
-| **4+** | Markdown vs JSONL output experiment, blind spot detection | Detection + quality baselines | Not started |
+| **4+** | Multi-model comparison, markdown vs JSONL experiment, blind spot detection | Detection + quality baselines | Not started |
 
-**Phase 1 is the immediate target.** Phases 2+ remain blocked until Phase 1 produces non-zero accuracy.
+**Phase 1.5 (multi-model comparison) deferred** — requires Google/Gemini account and cost tracking infrastructure. Moved to Phase 4+ to keep the critical path clean.
+
+---
+
+## Phase 1 Success Criteria
+
+Phase 1 is complete when all of the following are true:
+
+1. All 5 per-reviewer eval tasks run without error (`make reviewer-eval` exits 0)
+2. All 5 agents produce parseable JSONL output (zero parse-error tasks)
+3. Combined detection rate ≥50% across all reviewer tasks on the ground truth dataset
+4. Eval suite cost within FR-ARCH-5 budget (<$0.50 per full run)
+5. `make test` passes with tests covering agent_loader, reviewer_filter, and per-reviewer task instantiation
+
+Phase 1 is **not** complete if any task crashes at instantiation, any agent produces 0 parseable findings, or combined detection is below 50%.
 
 ---
 
@@ -203,15 +236,17 @@ Items that were already deferred in v1 remain deferred:
 
 ---
 
-## Open Questions (v2)
+## Resolved Decisions
 
-1. **post-review finding handling:** v1-post-review-001 was discovered during implementation, not by a reviewer agent. It is excluded from per-reviewer task ground truth. Should it be added to a separate "implementation discovery" dataset to track future misses?
+These were open questions in earlier drafts, now resolved:
 
-2. **Reviewer consensus threshold:** If 3/5 reviewers independently flag the same root cause (e.g., ground truth circular dependency), should duplicates be deduplicated to one ground truth finding or kept as separate findings for each reviewer?
+**Ground truth size for Phase 1:** 10 Critical findings (requirements-light dataset) is sufficient. Per-reviewer N≈2 is low but adequate to confirm architecture correctness — the Phase 1 target (≥50% combined recall) is achievable at this sample size. Important findings are added in Phase 2 when precision tuning begins, not before.
 
-3. **Ground truth size:** 10 validated Critical findings (requirements-light dataset) — sufficient for Phase 1 detection baseline? Or should Important findings be added before Phase 1 completes?
+**Reviewer consensus deduplication:** When multiple reviewers flag the same root cause, store one ground truth finding per reviewer in the dataset (not deduplicated). Each per-reviewer task needs its own matching finding. The `reviewer` field in ground truth records which agent produced it; `reviewer_eval.py` filters to each agent's own findings.
 
-4. **Ablation tasks:** With per-reviewer decomposition, should ablation tests also be decomposed per-agent, or is a combined "drop all persona content" test sufficient for Phase 1?
+**Ablation task decomposition:** Combined "drop all persona content" test is sufficient for Phase 1. Per-agent ablation (e.g., drop assumption-hunter only) deferred to Phase 3+ when individual agent contribution analysis becomes tractable.
+
+**post-review findings:** v1-post-review-001 (and any future implementation-discovery findings) excluded from per-reviewer ground truth. They require implementation knowledge no agent has from the document alone. Track in dataset with `"discovery": "implementation"` field for future system-test use (Phase 3, agent bridge).
 
 ---
 
