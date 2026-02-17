@@ -124,13 +124,15 @@ def assumption_hunter_eval() -> Task:
 
 **Before writing a single line of `reviewer_eval.py`**, complete this checklist for all 5 agents:
 
-| Agent | JSONL native | No fences | No "Read the file" | All required fields |
-|-------|-------------|-----------|-------------------|---------------------|
-| assumption-hunter | ❌ Fix required | verify | Fix required | verify |
-| constraint-finder | verify | verify | verify | verify |
-| problem-framer | verify | verify | verify | verify |
-| scope-guardian | verify | verify | Fix required | verify |
-| success-validator | verify | verify | Fix required | verify |
+| Agent | JSONL native | No fences in output | All required fields |
+|-------|-------------|---------------------|---------------------|
+| assumption-hunter | ❌ Fix required | verify | verify |
+| constraint-finder | verify | verify | verify |
+| problem-framer | verify | verify | verify |
+| scope-guardian | verify | verify | verify |
+| success-validator | verify | verify | verify |
+
+Note: "Read the document" instructions in agent body text are intentionally retained — document content is available via `Sample.input` in Phase 1; mock tools (Phase 2 Tier 2) will satisfy tool calls fully. See Problem 3 below.
 
 **Do not skip this gate.** The v1 `accuracy: 0.000` failure was caused by exactly this kind of format mismatch. Gate `make reviewer-eval` behind passing this checklist.
 
@@ -156,9 +158,13 @@ Add a test: provide fenced-but-valid JSONL, assert correct finding count. Add a 
 
 Also update all agent system prompts to include: _"Output raw JSONL only. Do not wrap output in markdown code fences."_
 
-**Problem 3 — Tool call instructions in body text (C-7):** `scope-guardian.md` and `success-validator.md` include "Read the design document thoroughly" as step 1 of their review process. In eval context, no tools are available — the model may attempt a tool call that fails, hallucinate a reading step, or skip it and produce fewer findings. FR-ARCH-2 acceptance criterion requires agents to contain "The design document content will be provided to you in this message."
+**Problem 3 — Tool call instructions in body text (C-7):** `scope-guardian.md` and `success-validator.md` include "Read the design document thoroughly" as step 1 of their review process. In Phase 1 eval context, no tools are provided — the model may attempt a `Read` call and fail.
 
-**Fix:** For all 5 agents: remove or qualify "Read the [document]" instructions. Add explicit transition language: _"The document content is provided below. You do not need to use any tools."_
+**Phase 1 mitigation (no agent changes):** Document content is passed in `Sample.input`, which becomes the user message. The agent sees the document content in its conversation context regardless of whether the `Read` tool call succeeds. For a smoke test, this is acceptable — agents will likely produce some findings even if the tool call fails.
+
+**Do not remove "Read the document" instructions from agent body text.** Doing so optimizes for eval context at the cost of production behavior (where `Read` is available and appropriate) and creates a permanent dual-context artifact. I-9 documents this tension explicitly.
+
+**Phase 2 resolution (Tier 2 — mock tools):** Implement mock tool handlers in eval context that return document content from a pre-loaded fixture when `Read` is called. This makes eval context faithful to production without any agent modifications. Agents retain their `Read` instructions; the mock tool satisfies the call. This is the planned path per the eval strategy synthesis (Tier 2 pattern). FR-ARCH-2 acceptance criterion should be updated to: "In Phase 1, document content is available via Sample.input. In Phase 2, mock tools satisfy Read calls from the fixture."
 
 ### Required JSONL Schema (all agents)
 
