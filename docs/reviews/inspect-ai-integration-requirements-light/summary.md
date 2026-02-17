@@ -1,8 +1,9 @@
 # Requirements Review Summary — Inspect AI Integration (Light Mode)
 
-**Review Date:** 2026-02-16
+**Review Date:** 2026-02-16 (re-review)
 **Design Document:** `docs/requirements/inspect-ai-integration-requirements-v1.md`
 **Reviewers:** problem-framer, scope-guardian, constraint-finder, assumption-hunter, success-validator
+**Note:** Previous review at Session 18 (79 findings). This re-review covers requirements-v1.md as currently published.
 
 ---
 
@@ -10,235 +11,177 @@
 
 | Reviewer | Critical | Important | Minor | Total |
 |----------|----------|-----------|-------|-------|
-| problem-framer | 2 | 6 | 3 | 11 |
-| scope-guardian | 2 | 8 | 6 | 16 |
-| constraint-finder | 3 | 9 | 6 | 18 |
-| assumption-hunter | 3 | 10 | 7 | 20 |
-| success-validator | 2 | 7 | 5 | 14 |
-| **Total** | **12** | **40** | **27** | **79** |
+| problem-framer | 4 | 5 | 3 | 12 |
+| scope-guardian | 3 | 5 | 3 | 11 |
+| constraint-finder | 4 | 6 | 6 | 16 |
+| assumption-hunter | 3 | 7 | 3 | 13 |
+| success-validator | 3 | 8 | 4 | 15 |
+| **Total** | **17** | **31** | **19** | **67** |
 
 ---
 
 ## Key Themes
 
-**The requirements document has a fundamental problem framing issue:** It treats Inspect AI integration as the goal, when the actual problem is "we don't know if parallax skills work." This manifests in three systemic failures:
+**The highest-consensus finding (4/5 reviewers independently):** Ground truth quality is unverified. FR0 describes a process checklist — expert examined, metadata present — but never specifies how to verify the resulting ground truth is *high quality*. An eval framework measuring against false-positive-contaminated ground truth produces meaningless detection rates. Every downstream metric (baseline, regression threshold, ablation pass/fail) inherits that corruption.
 
-1. **Circular validation dependency** — The eval framework measures "do new skills match v3 outputs" without first validating that v3 outputs are correct. Ground truth is unvalidated LLM outputs, not confirmed design flaws. This chicken-and-egg problem blocks the entire approach.
+**The second systemic pattern:** Measurements without definitions. Four thresholds appear as specific numbers with no empirical basis, no definition of how they're measured, and no calibration step: the 95% confidence gate (FR3.3, appears 5 times), the 80% fuzzy match threshold, the >50% ablation drop (FR4.1), the 10% regression threshold (FR6.2). These look like acceptance criteria but cannot be implemented or tested.
 
-2. **MVP solves the wrong problem** — Phase 1 validates "Inspect AI works" (technical integration success) but defers finding quality scorer to Phase 2. The MVP cannot answer the core question: "do skills catch real design flaws?"
-
-3. **Unimplementable specifications** — Multiple critical requirements lack definitions: 95% confidence measurement undefined (appears 5 times), detection rate thresholds missing, ablation test baseline X undefined, ground truth Dataset schema unspecified.
-
-**Problem Framing:**
-Problem-framer identified that jobs-to-be-done conflate problem with solution (Inspect AI framed as answer within problem description). Jobs 4-5 (cost optimization, multi-model portability) solve theoretical problems without evidence they exist. The document jumps directly to solution-oriented requirements without explicitly stating the problem.
-
-**Scope & Boundaries:**
-Scope-guardian found contradictions between deferred items and acceptance criteria (FR8 multi-model marked "deferred" but has full acceptance criteria). Planted flaw detection (FR5.1) implies weeks of dataset authoring work not captured in Phase 1's 1-week timeline. MVP scope has 20-40% hidden tooling effort (multi-source dataset loading, confidence measurement workflow, version comparison infrastructure).
-
-**Constraints & Feasibility:**
-Constraint-finder identified three critical blockers: Python environment unspecified (blocks installation), API key security undefined (violates work policies), circular ablation tests (ground truth established before validation). The $0.50 cost target is infeasible—22 samples × 15.5k tokens = $1.02. Manual validation workflow (78 minutes for 87 findings) blocks the <5 minute automation target.
-
-**Assumptions:**
-Assumption-hunter found the entire framework optimizes against unvalidated v3 findings (Critical finding 001). Statistical methodology lacks justification: 10% regression threshold doesn't account for N=22 variance, 50% ablation threshold doesn't measure base model capability, 70% detection rate has no empirical source. Prompt caching (90% cost savings) isn't in cost calculations, making estimates 5-10× too high.
-
-**Success Criteria:**
-Success-validator identified that only 2/8 success criteria are quantitative. FR2.2 detection rate has no target thresholds (can't determine pass/fail), ablation test baseline X is undefined (test can't run), 95% confidence threshold calculation method not specified (appears in 5 requirements). The $0.50 cost target has no token budget breakdown showing it's achievable.
+**The third pattern:** Deferred-but-specified anti-pattern, three times. FR7.1, FR8.1, and FR9.1 each contain full acceptance criteria immediately contradicted by FR7.2, FR8.2, and FR9.2 which defer the feature entirely. Documents that support both "build it" and "skip it" interpretations cause predictable wasted work.
 
 ---
 
-## Critical Findings (12 Total)
+## Problem Framing
 
-### Problem Framing (2 Critical)
+The Problem Statement opens with solution context (Inspect AI integration decision) rather than the problem. The document conflates two distinct problems with different timelines and failure modes: (1) ground truth creation — a human judgment workflow, and (2) skill measurement — an engineering problem. The circular validation dependency is correctly identified but dismissed in one line. The actual consequence — that Phase 1 eval will measure consistency against LLM output, not accuracy against verified flaws — is never stated.
 
-1. **v1-problem-framer-006 — Ground truth validation circular dependency**
-   - Issue: v3 findings are unvalidated LLM outputs, not confirmed design flaws. Eval framework will measure "do new skills match old outputs" rather than "do skills catch real flaws." This chicken-and-egg problem is the actual blocker.
-   - Suggestion: Establish ground truth via human expert review of 22 v3 Critical findings BEFORE building eval framework. Each finding validated as: (a) real flaw, (b) false positive, (c) ambiguous. Only use (a) as ground truth. This validates the foundation before investing in measurement infrastructure.
+Jobs 4 (cost optimization) and 5 (multi-model portability) are presented as "five validated needs" but are anticipated future concerns with no evidence of current pain. The MVP proves integration works, not that skills catch real flaws — the finding quality scorer required to answer the core question is deferred to Phase 2.
 
-2. **v1-problem-framer-008 — MVP solves measurement, not validation**
-   - Issue: Phase 1 validates "Inspect AI works" not "parallax skills work." Finding quality scorer deferred to Phase 2 means MVP cannot answer core question: "do skills catch design flaws?"
-   - Suggestion: Reframe MVP as "validate ground truth exists" not "build eval framework." Phase 1: Human expert validation of v3 Critical findings. Phase 2: Build eval framework against validated ground truth. Inspect AI integration is Phase 2 work, not Phase 1.
+## Scope & Boundaries
 
-### Scope Boundaries (2 Critical)
+Three deferred requirements (FR7, FR8, FR9) have complete acceptance criteria written for features that are immediately deferred. FR5.1 (planted flaw detection) appears in Phase 1 scope with full acceptance criteria but requires weeks of synthetic design doc authoring work that doesn't appear in any phase. The Flask validation UI is in the design doc as Phase 1 work but absent from requirements — Phase 0 depends on it as an enabling tool with no documented fallback.
 
-3. **v1-scope-guardian-004 — Ground truth dataset format not specified**
-   - Issue: Inspect AI Dataset schema is undefined. FR3.1 requires converting artifacts to "Inspect AI Dataset format" but doesn't specify Sample schema, input/target fields, or metadata structure. Blocks implementation start.
-   - Suggestion: Research Inspect AI Sample format, document schema in FR3.1 acceptance criteria. Example: `Sample(input=design_doc_text, target=expected_findings_jsonl, metadata={...})`. Must define before conversion work begins.
+The Open Questions section has four questions that directly gate acceptance criteria in FR2.2, FR4.1, FR4.2, and FR6.2. None have a resolution owner, method, or phase assignment. Phase timelines in the MVP scope section violate the project convention (CLAUDE.md: never include time estimates).
 
-4. **v1-scope-guardian-013 — Confidence measurement undefined**
-   - Issue: FR2.3 requires flagging <95% confidence findings but doesn't define how confidence is measured. Blocks manual validation workflow (Success Criteria #5).
-   - Suggestion: Define confidence measurement in FR2.3: (a) LLM self-assessment score 0-100, (b) semantic similarity to known patterns, (c) human evaluator agreement rate. Without definition, requirement is unimplementable.
+## Constraints & Feasibility
 
-### Constraints (3 Critical)
+Python environment constraints are absent from requirements. Two cost targets exist in the same document without reconciliation ($0.50 in NFR1.2 vs $2.00 in Success Criteria #7). The NFR numbering scheme has a collision: NFR1.1 and NFR1.2 appear in both API Key Security and Cost Tracking sections, making cross-references ambiguous. API key security policy states intent ("keys never in VCS") but provides no enforcement mechanism.
 
-5. **v1-constraint-finder-001 — Python environment constraints missing**
-   - Issue: No Python version, venv strategy, or dependency conflict resolution specified. Inspect AI requires Python 3.10+, may conflict with existing project dependencies. Blocks installation (Success Criteria #1).
-   - Suggestion: Add NFR: Python 3.11+ required, use dedicated venv `parallax-evals/`, document Inspect AI version pinning. Address potential conflicts with Claude Code's Python environment.
+The Inspect AI version is unbounded above (`>=0.3`), meaning two developers running `make setup` a week apart may get incompatible API versions silently. Ablation tests have a circular dependency: ground truth used to establish baseline that ablation tests then validate against.
 
-6. **v1-constraint-finder-002 — API key security undefined**
-   - Issue: No separation between work/personal keys, rotation policies, or CI/CD access patterns. Work context uses Bedrock (IAM roles), personal uses direct API (env vars). Violates security policies if keys mixed.
-   - Suggestion: Add NFR: Separate API key namespaces (ANTHROPIC_API_KEY for personal, AWS credentials for work). Document key rotation frequency (30 days). CI/CD uses GitHub Secrets, not hardcoded keys.
+## Assumptions
 
-7. **v1-constraint-finder-009 — Circular validation in ablation tests**
-   - Issue: FR6.1 establishes baseline from first eval run, then FR4.1 validates ablation against that baseline. Ground truth established before validation, allowing false positives to contaminate baseline. Invalidates entire eval framework.
-   - Suggestion: Reorder phases: (1) Validate ground truth via human expert review, (2) Establish baseline against validated ground truth, (3) Run ablation tests against validated baseline. Break circular dependency.
+The manual validation UI (Flask tool from design doc) is assumed to exist as a prerequisite for Phase 0 but is out of scope. The 95% confidence threshold for auto-adding ground truth findings appears 5 times across the document but is never defined — who calculates it, against what scale, using what method. The 15-finding minimum has no statistical grounding relative to the 10% regression threshold (at N=15, binomial variance spans ±25%, wider than the threshold itself). The ablation test assumes base model detection capability is near zero — if Sonnet detects 40% of flaws via general reasoning, the ablation test validates presence but not skill quality.
+
+## Success Criteria
+
+FR2.1 (severity calibration scorer) has no defined pass/fail rule — thresholds are listed but the logic producing pass vs fail is absent. Success Criteria #5 conflicts with FR4.2: both use "contributes X% to detection rate" but measure different things (whole-skill vs per-section ablation). The regression threshold in FR6.2 doesn't specify absolute vs relative drop, and doesn't define the behavioral response (block merge? warn? log?). FR0 acceptance criteria are a process checklist with no quality floor.
+
+---
+
+## Critical Findings (17 Total)
+
+### Problem Framing (4 Critical)
+
+1. **[problem-framer-004] Core challenge framed as footnote, not gating constraint**
+   - Issue: Circular validation dependency acknowledged in one sentence then dismissed. It gates all other requirements — the document never states this.
+   - Suggestion: Add explicit gate: FR0 must complete before FR1–FR6 are meaningful. Phase 1 code running against unvalidated ground truth produces misleading metrics.
+
+2. **[problem-framer-005] Document conflates two distinct problems**
+   - Issue: Ground truth creation (human judgment problem) and skill measurement (engineering problem) treated as one, with the prerequisite relationship buried in MVP Scope Summary.
+   - Suggestion: Split into two problem statements with explicit prerequisite relationship stated up front.
+
+3. **[problem-framer-006] Eval measures consistency, not accuracy**
+   - Issue: Using unvalidated v3 findings makes the framework measure "do new skills match old outputs?" not "do skills catch real flaws?" A prompt change that improves accuracy but shifts phrasing registers as a regression.
+   - Suggestion: State this explicitly in Problem Statement. FR0 is a prerequisite, not a phase.
+
+4. **[problem-framer-008] MVP proves integration works, not that skills catch real flaws**
+   - Issue: Phase 1 success criteria validate Inspect AI runs and produces a number — not that the number means anything. Finding quality scorer deferred to Phase 2.
+   - Suggestion: Add Phase 1 success criterion: "Baseline detection rate measured against ≥15 human-validated findings (not unvalidated LLM outputs)."
+
+### Scope (3 Critical)
+
+5. **[scope-guardian-001] FR5.1 planted flaw detection is Phase 1 with no authoring plan**
+   - Issue: Planted flaw test datasets require days/weeks of synthetic design doc authoring. This work appears in no phase, no timeline, no scope statement.
+   - Suggestion: Move FR5.1 to Phase 2 explicitly, or scope the authoring work and add it to Phase 1.
+
+6. **[scope-guardian-002] FR7.1 and FR7.2 contradict each other**
+   - Issue: FR7.1 has 4 complete acceptance criteria. FR7.2 immediately defers the feature. Both are present.
+   - Suggestion: Remove FR7.1 acceptance criteria. Keep only the deferral rationale in FR7.2.
+
+7. **[scope-guardian-003] FR8 and FR9 repeat the deferred-but-specified pattern**
+   - Issue: FR8.1 and FR9.1 have full acceptance criteria; FR8.2 and FR9.2 immediately defer them. Same problem as FR7, appearing twice more.
+   - Suggestion: Rule: deferred requirements get one sentence (rationale + post-MVP scope), no acceptance criteria.
+
+### Constraints (4 Critical)
+
+8. **[constraint-finder-001] Python environment constraints absent**
+   - Issue: No Python version, no dependency manager, no virtual environment specification. Inspect AI requires Python 3.10+, may conflict with existing dependencies.
+   - Suggestion: Add NFR: "Python ≥3.11, managed via pyproject.toml with uv/pip, virtual environment required."
+
+9. **[constraint-finder-002] API key security policy has no enforcement mechanism**
+   - Issue: "Keys never in VCS" stated but no mechanism (pre-commit scan, `.env` in `.gitignore`, CI check) is required.
+   - Suggestion: Add acceptance criterion: pre-commit hook scans for `ANTHROPIC_API_KEY=` patterns. Failing commit blocks with actionable error.
+
+10. **[constraint-finder-003] Dual cost targets contradict each other**
+    - Issue: NFR1.2 says <$0.50. Success Criteria #7 says <$2.00. Both are current text, no reconciliation.
+    - Suggestion: Remove NFR1.2 and standardize on <$2.00 as the MVP target, noting this is pre-prompt-caching.
+
+11. **[constraint-finder-009] Ablation test has circular dependency**
+    - Issue: FR6.1 establishes baseline from first eval run. FR4.1 validates ablation against that baseline. Ground truth established before validation — allows false positives to contaminate baseline.
+    - Suggestion: Enforce ground truth gate before FR6.1 baseline can be stored. `make baseline` exits if `critical_findings.jsonl` is empty.
 
 ### Assumptions (3 Critical)
 
-8. **v1-assumption-hunter-001 — Ground truth validity assumed**
-   - Issue: Entire eval framework optimizes against v3 review findings without validating they're correct. If v3 has false positives or missed issues, eval framework will optimize for wrong outcomes.
-   - Suggestion: Add FR0 (prerequisite): Human expert validation of v3 Critical findings. Create `datasets/v3_review_validated/` with expert-confirmed findings. Use only validated findings as ground truth. Document validation process in acceptance criteria.
+12. **[assumption-hunter-001] Ground truth validity assumed without enforcement**
+    - Issue: Phase 1 can proceed against unvalidated ground truth. The enforced gate is missing in requirements.
+    - Suggestion: `make eval` exits non-zero if `critical_findings.jsonl` is empty. No Phase 1 code merged until ground truth exists.
 
-9. **v1-assumption-hunter-013 — Confidence measurement undefined**
-   - Issue: 95% confidence threshold appears in 5 places (FR2.3, FR3.3, NFR4.1, Success Criteria, Open Questions) but never defines how confidence is calculated. Requirement is literally unimplementable without measurement methodology.
-   - Suggestion: Add FR2.4: "Confidence calculation methodology" — Specify: (a) LLM logprobs, (b) semantic similarity scores, (c) multi-model agreement, (d) human calibration. Document which method used for 95% threshold.
+13. **[assumption-hunter-003] Model output format assumed parseable JSONL**
+    - Issue: Entire scoring mechanism depends on `parse_review_output()` succeeding. LLM may return Markdown prose, incomplete JSON, or unexpected field names. Parser failure looks identical to skill failure.
+    - Suggestion: Add acceptance criterion: eval task validates output is parseable before scoring. Parser failures logged as eval errors, not scored as 0%.
 
-10. **v1-assumption-hunter-005 — Skill versioning strategy missing**
-    - Issue: FR7.1 requires running evals against different skill versions via git commit, but doesn't specify how this works if skill definitions are external or if checking out old commits breaks eval code.
-    - Suggestion: Add FR7.3: "Version compatibility matrix" — Document backward compatibility strategy. Options: (a) evals track skill schema versions, (b) skill changes are additive only, (c) major versions require new eval suites. Choose explicit strategy.
+14. **[assumption-hunter-013] 95% confidence threshold unmeasurable as specified**
+    - Issue: FR3.3 gates auto-add on ≥95% confidence but never defines who calculates it, against what scale, using what method. Appears 5 times in the document. Cannot be implemented.
+    - Suggestion: Replace with binary classification: `confirmed` vs `needs_review`. All `needs_review` requires explicit user approval. Remove the numeric threshold.
 
-### Success Criteria (2 Critical)
+### Success Criteria (3 Critical)
 
-11. **v1-success-validator-001 — FR2.2 detection rate has no target thresholds**
-    - Issue: "Compares detected Critical findings to ground truth" with "detection rate (recall), precision, F1" but no target values. Cannot determine success vs failure.
-    - Suggestion: Add quantified thresholds to FR2.2: "Target: recall ≥70%, precision ≥80%, F1 ≥0.74. MVP passes if all three thresholds met on v3 Critical findings."
+15. **[success-validator-001] FR2.1 scorer has no pass/fail rule**
+    - Issue: Distribution thresholds listed (Critical <30%, Important 40-50%, Minor 20-30%) but the logic producing pass vs fail is absent. A developer cannot implement this without inventing the rule.
+    - Suggestion: Add: "Scorer returns FAIL if Critical% exceeds 30% OR Important% outside 40-50% OR Minor% outside 20-30%."
 
-12. **v1-success-validator-002 — FR4.1 ablation test baseline undefined**
-    - Issue: "Baseline: Full skill content → detection rate X%" but X is never defined. "Ablation: Drop content → detection rate < (X - 50)%" cannot run without baseline value.
-    - Suggestion: Add to FR4.1: "Baseline X established in FR6.1 (first eval run). Example: if baseline = 75%, ablation must drop to <25%. Test fails if detection rate remains >25% after content removal."
+16. **[success-validator-002] FR4.1 ablation formula parameterized on unknown**
+    - Issue: "detection drops to <(X - 50)%" where X is established at runtime by FR6.1. Boundary cases (X=75%? X=95%?) unspecified. Two developers produce different pass/fail on the same data.
+    - Suggestion: Specify formula completely: "If baseline ≥90%: ablation must drop to <40%. If baseline 80-89%: drop to <30%. If baseline <80%: Phase 1 incomplete (must reach ≥90% before ablation)."
+
+17. **[success-validator-003] Success Criteria #5 conflicts with FR4.2**
+    - Issue: SC #5 measures whole-skill ablation. FR4.2 measures per-section ablation. Both use "contributes X% to detection rate" but measure different things.
+    - Suggestion: Separate: SC #5 = whole-skill ablation (drop all → <40%), FR4.2 = per-section (each section drops >15% when removed). Align units.
 
 ---
 
-## Important Findings (40 Total - Top 10 Shown)
+## Important Findings (Selected)
 
-### High-Impact Important Findings
+1. **[assumption-hunter-006] 15-finding minimum has no statistical grounding** — At N=15, binomial variance is ±25% at 95% confidence, wider than the 10% regression threshold. Regression detection will fire on statistical noise.
 
-1. **v1-problem-framer-001 — No explicit problem statement**
-   - Jobs-to-be-done section jumps directly to solution-oriented descriptions without stating underlying problem. Makes it difficult to evaluate if requirements address root cause.
-   - Suggestion: Add "Problem Statement" section before Jobs: "Parallax skills are developed iteratively with no systematic way to measure effectiveness. Changes to skill prompts may improve, degrade, or have no effect on finding quality—we cannot tell which. This blocks empirical improvement and risks shipping broken skills to production."
+2. **[assumption-hunter-007] Ablation doesn't measure base model capability** — If Sonnet detects 40% of flaws via general reasoning, a 90%→40% drop "passes" but the skill only adds 50 points over a 40-point base. Add zero-skill baseline to FR4.
 
-2. **v1-scope-guardian-005 — Planted flaw detection implies weeks of hidden work**
-   - FR5.1 requires test dataset with planted flaws but doesn't account for authoring effort (design docs with known issues, ground truth labels, multiple flaw categories). Could add 2-4 weeks to Phase 1.
-   - Suggestion: Move planted flaw tests to explicit deferral list. Phase 1 uses only real review findings from v3. Phase 3 (post-MVP) adds synthetic test cases with planted flaws.
+3. **[assumption-hunter-011] Manual validation UI assumed available** — Phase 0 depends on Flask validation tool which is out of scope. Document a manual fallback (direct JSONL editing with `validation_status` field).
 
-3. **v1-scope-guardian-008 — Multi-model comparison scope contradiction**
-   - FR8.1 has full acceptance criteria (implies MVP scope), FR8.2 defers to post-MVP. Contradiction creates scope uncertainty.
-   - Suggestion: Remove FR8.1 acceptance criteria, consolidate into FR8.2. Clarify: "Multi-model comparison deferred to Phase 2. MVP validates single-model (Sonnet) integration pattern first."
+4. **[assumption-hunter-012] Single sample per eval run hides per-finding stability** — One design doc = one Sample = one aggregate recall number. Convert each finding to its own Sample for N=15 independent measurements, per-finding diagnostics.
 
-4. **v1-constraint-finder-003 — Token consumption exceeds cost target**
-   - NFR1.2 targets <$0.50 per eval run, but 22 samples × 700 tokens/sample × 15.5k output tokens = ~340k tokens = $1.02 (Sonnet input $3/MTok, output $15/MTok). Math doesn't work.
-   - Suggestion: Revise NFR1.2 cost target to <$2.00 per eval run (realistic for 22 samples), OR reduce sample size to 10 Critical findings (<$0.50), OR use Haiku for severity calibration ($0.08).
+5. **[scope-guardian-007] Open Questions 1-4 gate acceptance criteria with no resolution plan** — Questions directly affect FR4.1, FR6.2, FR2.2 thresholds. Need resolution owner and phase assignment.
 
-5. **v1-constraint-finder-004 — Manual validation doesn't scale**
-   - FR3.3 requires manual validation of <95% confidence findings. 87 findings × 54 seconds/finding = 78 minutes human time. Blocks NFR4.1's <5 minute automation target.
-   - Suggestion: Add NFR: "Manual validation occurs during dataset creation (one-time cost), not during eval runs. Once dataset validated, evals run fully automated. Human time is setup cost, not runtime cost."
+6. **[constraint-finder-008] NFR numbering collision** — NFR1.1 and NFR1.2 appear in both API Key Security and Cost Tracking sections. Cross-references to NFR IDs are ambiguous.
 
-6. **v1-assumption-hunter-008 — Prompt caching not in cost calculations**
-   - ADR-005 cites prompt caching as 90% input cost reduction, but NFR1 cost targets don't account for it. Estimates may be 5-10× too high if caching works, or accurate if caching doesn't apply.
-   - Suggestion: Add cost calculation methodology to NFR1.2: "Cost assumes cold cache (no prompt caching). With caching: input tokens 10% of cost, output tokens dominate. Revise targets after caching validation."
+7. **[constraint-finder-005] Inspect AI version unpinned** — `inspect-ai>=0.3` with no upper bound. Two developers running `make setup` a week apart may get incompatible versions.
 
-7. **v1-assumption-hunter-014 — Regression threshold ignores statistical variance**
-   - FR6.2 flags regression if detection rate drops >10% with N=22 samples. Statistical noise alone could cause 10% variance (confidence intervals overlap). False positive regression alerts likely.
-   - Suggestion: Add statistical significance test to FR6.2: "Regression detected if detection rate drop >10% AND p<0.05 (two-proportion z-test). Prevents false alarms from natural variance."
+8. **[success-validator-005] Dual cost targets** — NFR1.2 says $0.50, SC #7 says $2.00. (See constraint-finder-003 above — resolve by removing NFR1.2.)
 
-8. **v1-success-validator-003 — 20% section contribution threshold lacks justification**
-   - FR4.2 states ablation test passes "if each section contributes >20% to detection rate" but doesn't justify 20%. Why not 10% or 30%? No empirical basis provided.
-   - Suggestion: Add justification to FR4.2: "20% threshold chosen to detect meaningful contributions (reject noise). Empirical calibration: run pilot ablations, set threshold at 2× observed noise level."
+9. **[success-validator-008] FR6.2 regression threshold ambiguous** — Absolute vs relative drop unspecified. Behavioral response (block/warn/log) undefined.
 
-9. **v1-success-validator-005 — $0.50 cost target may be unachievable**
-   - NFR1.2 targets <$0.50 per eval run but provides no token budget breakdown showing it's achievable. May be aspirational rather than realistic.
-   - Suggestion: Add token budget to NFR1.2: "Budget: 22 samples × 500 input tokens × $3/MTok + 22 × 5k output tokens × $15/MTok = $1.68. Reduce to <$0.50 via: (a) 10 samples ($0.76), (b) Haiku ($0.08), (c) batch API ($0.38 with 50% discount)."
-
-10. **v1-success-validator-009 — 70% detection rate borrowed without validation**
-    - FR5.1 targets ">70% detection rate for planted Critical flaws" citing "FR1.2 acceptance criteria in parallax-review-requirements-v1.md." That target was for diversity metrics, not detection rate. Misapplied threshold.
-    - Suggestion: Justify 70% threshold empirically or remove it. If keeping, cite correct source: "70% target based on [research/baseline/pilot data]. Lower bound for useful tool—below this, too many flaws missed."
+10. **[success-validator-011] FR5.1 70% detection target cites wrong source** — Cites parallax-review-requirements-v1.md FR1.2 as justification, but that source is a diversity metric, not a detection rate. Threshold has no valid empirical basis.
 
 ---
 
 ## Next Steps
 
-### Immediate Actions (Resolve Critical Blockers)
+1. **Address Critical findings** — The highest-priority cluster to fix before implementation:
+   - Remove acceptance criteria from FR7.1, FR8.1, FR9.1 (scope-guardian-002/003) — quick edit
+   - Reconcile dual cost targets, remove $0.50 from NFR1.2 (constraint-finder-003)
+   - Fix NFR numbering collision (constraint-finder-008) — unblocks cross-references
+   - Add FR2.1 pass/fail rule (success-validator-001)
+   - Replace 95% confidence threshold with `confirmed`/`needs_review` binary (assumption-hunter-013)
+   - Add output parseability acceptance criterion (assumption-hunter-003)
+   - Specify ablation formula boundary cases (success-validator-002)
+   - Resolve SC #5 / FR4.2 conflict (success-validator-003)
 
-1. **STOP — Validate ground truth first** (problem-framer-006, assumption-hunter-001, constraint-finder-009)
-   - DO NOT build eval framework until v3 Critical findings validated by human expert
-   - Create validation process: expert reviews each finding, marks as real/false-positive/ambiguous
-   - Use only confirmed real findings as ground truth
-   - Document validation process in FR0 (prerequisite requirement)
+2. **Address Important findings** — Especially:
+   - Statistical grounding for N=15 threshold (assumption-hunter-006)
+   - Base model capability measurement in ablation (assumption-hunter-007)
+   - Open Questions resolution plan (scope-guardian-007)
+   - Per-finding Sample structure (assumption-hunter-012)
 
-2. **Reframe MVP goal** (problem-framer-008)
-   - Phase 1: Validate ground truth exists (human expert review of v3 Critical findings)
-   - Phase 2: Build eval framework against validated ground truth (Inspect AI integration)
-   - Current Phase 1 is actually Phase 2 work
+3. **Minor findings** — Defer most; cosmetic and low-risk.
 
-3. **Define unimplementable requirements** (scope-guardian-004, scope-guardian-013, assumption-hunter-013, success-validator-001, success-validator-002)
-   - Research and document Inspect AI Dataset schema (FR3.1)
-   - Define confidence measurement methodology (FR2.3)
-   - Add detection rate target thresholds (FR2.2)
-   - Define ablation test baseline X (FR4.1)
-
-4. **Fix cost target** (constraint-finder-003, success-validator-005)
-   - Revise NFR1.2 to <$2.00 per eval run (realistic) OR reduce sample size OR use Haiku
-   - Add token budget breakdown showing target is achievable
-
-5. **Add missing constraints** (constraint-finder-001, constraint-finder-002)
-   - Document Python environment requirements (version, venv, dependencies)
-   - Define API key security policies (work/personal separation, rotation)
-
-### Secondary Actions (Address Important Findings)
-
-6. **Clarify scope boundaries**
-   - Remove planted flaw detection from Phase 1 (scope-guardian-005)
-   - Resolve multi-model comparison contradiction (scope-guardian-008)
-   - Document hidden tooling effort (scope-guardian-010)
-
-7. **Fix statistical methodology**
-   - Add statistical significance tests to regression detection (assumption-hunter-014)
-   - Justify ablation threshold or make it configurable (success-validator-003)
-   - Validate or remove 70% detection rate target (success-validator-009)
-
-8. **Improve cost modeling**
-   - Account for prompt caching in cost calculations (assumption-hunter-008)
-   - Separate one-time setup costs from runtime costs (constraint-finder-004)
-
-### Decision Points
-
-9. **Review requirements after addressing Critical findings**
-   - If ground truth validation fails (many false positives in v3), pivot to different approach
-   - If cost target cannot be met, reconsider MVP scope or tool choice
-   - If Inspect AI Dataset schema is incompatible, evaluate alternatives
-
-10. **Consider re-running requirements review**
-    - After resolving 12 Critical findings, requirements may change substantially
-    - Re-review validates fixes don't introduce new issues
-
----
-
-## Review Metadata
-
-**Total findings:** 79 (12 Critical, 40 Important, 27 Minor)
-
-**Critical finding themes:**
-- Ground truth validation (4 findings across 3 reviewers) — systemic issue
-- Undefined requirements (5 findings) — implementation blockers
-- Circular dependencies (2 findings) — design flaws
-- Missing constraints (1 finding) — environment setup
-
-**Reviewer consensus areas:**
-- All 5 reviewers flagged ground truth validation issues (Critical or Important)
-- 4 reviewers flagged 95% confidence measurement undefined
-- 4 reviewers flagged cost target infeasibility
-- 3 reviewers flagged statistical methodology gaps
-
-**High-confidence findings:**
-- Findings flagged by 3+ reviewers are highest priority
-- Ground truth validation is THE blocker (unanimous across reviewers)
-- Confidence measurement undefined appears in 5 requirements but has no definition
-
-**Estimated rework:**
-- Addressing 12 Critical findings: 1-2 days (requirements rewrite)
-- Addressing top 10 Important findings: 2-3 days (scope clarification, cost modeling)
-- Ground truth validation prerequisite: 2-4 weeks (human expert review of v3 findings)
-
-**MVP timeline impact:**
-- Original estimate: 1 week (Phase 1)
-- Revised estimate: 3-5 weeks (ground truth validation + Phase 1)
-- Blocker: Cannot start Inspect AI integration until ground truth validated
+4. **Re-run after major changes** — If the ground truth gate, measurement definitions, and scope contradictions are all addressed, re-run to verify no new issues introduced.

@@ -111,6 +111,16 @@ def test_load_validated_findings_sample_structure(tmp_path):
     assert sample.metadata["expected_findings"][0]["id"] == "v3-assumption-hunter-001"
 
 
+def test_real_ground_truth_loads_correctly():
+    """Real dataset must load 9 validated findings — catches empty file, corrupt JSONL, or wrong count."""
+    dataset = load_validated_findings("datasets/inspect-ai-integration-requirements-light")
+    sample = dataset[0]
+    findings = sample.metadata["expected_findings"]
+    assert len(findings) == 9
+    assert all(f["validation_status"] == "real_flaw" for f in findings)
+    assert all(f["severity"] == "Critical" for f in findings)
+
+
 def test_load_validated_findings_filters_non_real_flaws(tmp_path):
     findings = [
         {

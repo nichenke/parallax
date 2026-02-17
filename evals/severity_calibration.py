@@ -7,7 +7,7 @@ from evals.utils.skill_loader import load_skill_content
 from scorers.severity_scorer import severity_calibration
 
 
-DATASET_PATH = Path(__file__).parent.parent / "datasets" / "v3_review_validated"
+DATASET_PATH = Path(__file__).parent.parent / "datasets" / "inspect-ai-integration-requirements-light"
 
 
 @task
