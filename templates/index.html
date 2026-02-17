@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Parallax Finding Validator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f5f5;
+            color: #333;
+            line-height: 1.6;
+        }
+
+        .container {
+            max-width: 900px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        header {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+
+        .progress {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .progress-text {
+            font-size: 14px;
+            color: #666;
+        }
+
+        .summary {
+            font-size: 12px;
+            color: #888;
+        }
+
+        .filters {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .filter-btn {
+            padding: 6px 12px;
+            border: 1px solid #ddd;
+            background: white;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .filter-btn.active {
+            background: #007bff;
+            color: white;
+            border-color: #007bff;
+        }
+
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+
+        .finding-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: start;
+            margin-bottom: 20px;
+        }
+
+        .finding-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: #222;
+            flex: 1;
+        }
+
+        .badges {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .badge {
+            padding: 4px 12px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .badge-critical {
+            background: #fee;
+            color: #c00;
+        }
+
+        .badge-confidence {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .section {
+            margin-bottom: 25px;
+        }
+
+        .section-label {
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: uppercase;
+            color: #666;
+            margin-bottom: 8px;
+            letter-spacing: 0.5px;
+        }
+
+        .section-content {
+            color: #444;
+            white-space: pre-wrap;
+        }
+
+        .validation-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 2px solid #f0f0f0;
+        }
+
+        .validation-buttons {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .validation-btn {
+            padding: 16px;
+            border: 2px solid #ddd;
+            background: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+            position: relative;
+        }
+
+        .validation-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+        }
+
+        .validation-btn.selected {
+            border-color: #007bff;
+            background: #e3f2fd;
+        }
+
+        .validation-btn kbd {
+            position: absolute;
+            top: 6px;
+            right: 8px;
+            background: #666;
+            color: white;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+        }
+
+        .btn-real { border-color: #28a745; }
+        .btn-real.selected { background: #d4edda; border-color: #28a745; }
+
+        .btn-false { border-color: #dc3545; }
+        .btn-false.selected { background: #f8d7da; border-color: #dc3545; }
+
+        .btn-ambiguous { border-color: #ffc107; }
+        .btn-ambiguous.selected { background: #fff3cd; border-color: #ffc107; }
+
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-family: inherit;
+            font-size: 14px;
+            resize: vertical;
+            min-height: 100px;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: #007bff;
+        }
+
+        .navigation {
+            display: flex;
+            gap: 12px;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-btn {
+            padding: 12px 24px;
+            border: none;
+            background: #007bff;
+            color: white;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: background 0.2s;
+        }
+
+        .nav-btn:hover {
+            background: #0056b3;
+        }
+
+        .nav-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .save-btn {
+            background: #28a745;
+            flex: 1;
+            font-size: 16px;
+            padding: 14px;
+        }
+
+        .save-btn:hover {
+            background: #218838;
+        }
+
+        .jump-controls {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+        }
+
+        input[type="number"] {
+            width: 80px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+
+        .validation-status {
+            padding: 12px;
+            border-radius: 6px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .status-validated {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+
+        .status-unvalidated {
+            background: #fff3cd;
+            color: #856404;
+            border: 1px solid #ffeaa7;
+        }
+
+        .keyboard-help {
+            margin-top: 15px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 4px;
+            font-size: 12px;
+            color: #666;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 60px 20px;
+            color: #666;
+        }
+
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            padding: 16px;
+            border-radius: 6px;
+            border: 1px solid #f5c6cb;
+        }
+
+        .reviewer-info {
+            font-size: 13px;
+            color: #666;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🔍 Parallax Finding Validator</h1>
+            <div class="progress">
+                <div>
+                    <div class="progress-text" id="progress-text">Loading...</div>
+                    <div class="summary" id="summary-text"></div>
+                </div>
+                <div class="filters">
+                    <button class="filter-btn active" data-filter="all">All</button>
+                    <button class="filter-btn" data-filter="unvalidated">Unvalidated</button>
+                    <button class="filter-btn" data-filter="validated">Validated</button>
+                </div>
+            </div>
+            <div class="keyboard-help">
+                ⌨️ Keyboard shortcuts: <kbd>1</kbd> Real Flaw • <kbd>2</kbd> False Positive • <kbd>3</kbd> Ambiguous • <kbd>→</kbd> Next • <kbd>←</kbd> Previous • <kbd>S</kbd> Save
+            </div>
+        </header>
+
+        <div id="app">
+            <div class="loading">Loading findings...</div>
+        </div>
+    </div>
+
+    <script>
+        // State
+        let findings = [];
+        let currentIndex = 0;
+        let currentFilter = 'all';
+        let selectedStatus = null;
+
+        // Initialize
+        async function init() {
+            try {
+                const response = await fetch('/api/findings');
+                const data = await response.json();
+
+                if (data.success) {
+                    findings = data.findings;
+                    renderFinding();
+                    updateSummary();
+                    setupEventListeners();
+                } else {
+                    showError(data.error);
+                }
+            } catch (error) {
+                showError('Failed to load findings: ' + error.message);
+            }
+        }
+
+        function getFilteredFindings() {
+            if (currentFilter === 'unvalidated') {
+                return findings.filter(f => !f.validated);
+            } else if (currentFilter === 'validated') {
+                return findings.filter(f => f.validated);
+            }
+            return findings;
+        }
+
+        function renderFinding() {
+            const filtered = getFilteredFindings();
+            const finding = filtered[currentIndex];
+
+            if (!finding) {
+                document.getElementById('app').innerHTML = '<div class="card">No findings match the current filter.</div>';
+                return;
+            }
+
+            const actualIndex = findings.indexOf(finding);
+            const isValidated = finding.validated;
+
+            let statusHtml = '';
+            if (isValidated) {
+                statusHtml = `
+                    <div class="validation-status status-validated">
+                        ✓ Previously validated as: <strong>${formatStatus(finding.validation_status)}</strong>
+                        ${finding.validation_notes ? `<br>Notes: ${finding.validation_notes}` : ''}
+                    </div>
+                `;
+            } else {
+                statusHtml = `
+                    <div class="validation-status status-unvalidated">
+                        ⚠️ Not yet validated
+                    </div>
+                `;
+            }
+
+            document.getElementById('app').innerHTML = `
+                <div class="card">
+                    <div class="finding-header">
+                        <div class="finding-title">${finding.title}</div>
+                        <div class="badges">
+                            <span class="badge badge-critical">${finding.severity}</span>
+                            ${finding.confidence ? `<span class="badge badge-confidence">Confidence: ${finding.confidence}</span>` : ''}
+                        </div>
+                    </div>
+
+                    ${finding.reviewer ? `<div class="reviewer-info">Reviewer: ${finding.reviewer}</div>` : ''}
+
+                    ${statusHtml}
+
+                    <div class="section">
+                        <div class="section-label">Issue</div>
+                        <div class="section-content">${finding.issue}</div>
+                    </div>
+
+                    <div class="section">
+                        <div class="section-label">Suggestion</div>
+                        <div class="section-content">${finding.suggestion}</div>
+                    </div>
+
+                    <div class="validation-section">
+                        <div class="section-label">Validation</div>
+
+                        <div class="validation-buttons">
+                            <button class="validation-btn btn-real ${selectedStatus === 'real_flaw' ? 'selected' : ''}"
+                                    onclick="selectStatus('real_flaw')">
+                                <kbd>1</kbd>
+                                ✓ Real Flaw
+                            </button>
+                            <button class="validation-btn btn-false ${selectedStatus === 'false_positive' ? 'selected' : ''}"
+                                    onclick="selectStatus('false_positive')">
+                                <kbd>2</kbd>
+                                ✗ False Positive
+                            </button>
+                            <button class="validation-btn btn-ambiguous ${selectedStatus === 'ambiguous' ? 'selected' : ''}"
+                                    onclick="selectStatus('ambiguous')">
+                                <kbd>3</kbd>
+                                ~ Ambiguous
+                            </button>
+                        </div>
+
+                        <div class="section">
+                            <div class="section-label">Validation Notes</div>
+                            <textarea id="validation-notes" placeholder="Explain your classification (why is this a real flaw / false positive / ambiguous?)">${isValidated && finding.validation_notes ? finding.validation_notes : ''}</textarea>
+                        </div>
+                    </div>
+
+                    <div class="navigation">
+                        <button class="nav-btn" onclick="previousFinding()" ${currentIndex === 0 ? 'disabled' : ''}>
+                            ← Previous
+                        </button>
+
+                        <div class="jump-controls">
+                            <span>Jump to:</span>
+                            <input type="number" id="jump-index" min="1" max="${filtered.length}" value="${currentIndex + 1}">
+                            <button class="nav-btn" onclick="jumpToFinding()">Go</button>
+                        </div>
+
+                        <button class="nav-btn save-btn" onclick="saveFinding()">
+                            Save & Continue
+                        </button>
+
+                        <button class="nav-btn" onclick="nextFinding()" ${currentIndex === filtered.length - 1 ? 'disabled' : ''}>
+                            Next →
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            // Restore selected status if this finding was already validated
+            if (isValidated && finding.validation_status) {
+                selectedStatus = finding.validation_status;
+            } else {
+                selectedStatus = null;
+            }
+
+            updateProgress();
+        }
+
+        function selectStatus(status) {
+            selectedStatus = status;
+            renderFinding();
+        }
+
+        function formatStatus(status) {
+            const map = {
+                'real_flaw': 'Real Flaw',
+                'false_positive': 'False Positive',
+                'ambiguous': 'Ambiguous'
+            };
+            return map[status] || status;
+        }
+
+        async function saveFinding() {
+            const filtered = getFilteredFindings();
+            const finding = filtered[currentIndex];
+
+            if (!selectedStatus) {
+                alert('Please select a validation status (Real Flaw, False Positive, or Ambiguous)');
+                return;
+            }
+
+            const notes = document.getElementById('validation-notes').value;
+
+            try {
+                const response = await fetch('/api/validate', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        id: finding.id,
+                        title: finding.title,
+                        issue: finding.issue,
+                        suggestion: finding.suggestion,
+                        severity: finding.severity,
+                        reviewer: finding.reviewer,
+                        confidence: finding.confidence,
+                        validation_status: selectedStatus,
+                        validation_notes: notes
+                    })
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    // Update local state
+                    finding.validated = true;
+                    finding.validation_status = selectedStatus;
+                    finding.validation_notes = notes;
+
+                    // Move to next finding
+                    if (currentIndex < filtered.length - 1) {
+                        nextFinding();
+                    } else {
+                        alert('All findings in this filter have been reviewed!');
+                        updateSummary();
+                    }
+                } else {
+                    alert('Error saving: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error saving: ' + error.message);
+            }
+        }
+
+        function nextFinding() {
+            const filtered = getFilteredFindings();
+            if (currentIndex < filtered.length - 1) {
+                currentIndex++;
+                renderFinding();
+            }
+        }
+
+        function previousFinding() {
+            if (currentIndex > 0) {
+                currentIndex--;
+                renderFinding();
+            }
+        }
+
+        function jumpToFinding() {
+            const input = document.getElementById('jump-index');
+            const targetIndex = parseInt(input.value) - 1;
+            const filtered = getFilteredFindings();
+
+            if (targetIndex >= 0 && targetIndex < filtered.length) {
+                currentIndex = targetIndex;
+                renderFinding();
+            }
+        }
+
+        function updateProgress() {
+            const filtered = getFilteredFindings();
+            const total = findings.length;
+            document.getElementById('progress-text').textContent =
+                `Finding ${currentIndex + 1} of ${filtered.length} ${currentFilter === 'all' ? `(${total} total)` : currentFilter}`;
+        }
+
+        async function updateSummary() {
+            try {
+                const response = await fetch('/api/summary');
+                const data = await response.json();
+
+                if (data.success) {
+                    const s = data.summary;
+                    document.getElementById('summary-text').textContent =
+                        `✓ ${s.real_flaw} Real | ✗ ${s.false_positive} False Positive | ~ ${s.ambiguous} Ambiguous | ${s.remaining} Remaining`;
+                }
+            } catch (error) {
+                console.error('Failed to update summary:', error);
+            }
+        }
+
+        function setupEventListeners() {
+            // Keyboard shortcuts
+            document.addEventListener('keydown', (e) => {
+                // Don't trigger if typing in textarea
+                if (e.target.tagName === 'TEXTAREA' || e.target.tagName === 'INPUT') {
+                    return;
+                }
+
+                if (e.key === '1') {
+                    selectStatus('real_flaw');
+                } else if (e.key === '2') {
+                    selectStatus('false_positive');
+                } else if (e.key === '3') {
+                    selectStatus('ambiguous');
+                } else if (e.key === 'ArrowRight') {
+                    e.preventDefault();
+                    nextFinding();
+                } else if (e.key === 'ArrowLeft') {
+                    e.preventDefault();
+                    previousFinding();
+                } else if (e.key === 's' || e.key === 'S') {
+                    e.preventDefault();
+                    saveFinding();
+                }
+            });
+
+            // Filter buttons
+            document.querySelectorAll('.filter-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                    btn.classList.add('active');
+                    currentFilter = btn.dataset.filter;
+                    currentIndex = 0;
+                    renderFinding();
+                });
+            });
+        }
+
+        function showError(message) {
+            document.getElementById('app').innerHTML = `
+                <div class="error">
+                    <strong>Error:</strong> ${message}
+                </div>
+            `;
+        }
+
+        // Start the app
+        init();
+    </script>
+</body>
+</html>

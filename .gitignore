@@ -1,1 +1,5 @@
 .worktrees/
+venv/
+datasets/
+__pycache__/
+*.pyc
