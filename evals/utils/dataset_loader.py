@@ -45,6 +45,13 @@ def load_validated_findings(
         and (reviewer_filter is None or f.get("reviewer") == reviewer_filter)
     ]
 
+    if reviewer_filter is not None and len(real_flaws) == 0:
+        raise ValueError(
+            f"reviewer_filter={reviewer_filter!r} returned 0 findings. "
+            f"Check that findings have a 'reviewer' field matching this value, "
+            f"and that matched findings have validation_status='real_flaw'."
+        )
+
     doc_path = Path(metadata["design_doc_path"])
     if not doc_path.is_absolute():
         doc_path = Path(__file__).parent.parent.parent / doc_path

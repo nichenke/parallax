@@ -186,3 +186,59 @@ def test_load_validated_findings_filters_non_real_flaws(tmp_path):
     # Only real_flaw findings in ground truth
     assert len(sample.metadata["expected_findings"]) == 1
     assert sample.metadata["expected_findings"][0]["id"] == "v3-test-001"
+
+
+def test_load_validated_findings_raises_on_empty_reviewer_filter(tmp_path):
+    """reviewer_filter that matches nothing must raise ValueError, not silently create empty dataset."""
+    finding = {
+        "type": "finding", "id": "v3-assumption-hunter-001", "title": "T",
+        "severity": "Critical", "validation_status": "real_flaw",
+        "reviewer": "assumption-hunter"
+    }
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Doc")
+    metadata = {
+        "source_review": "test", "design_doc_path": str(doc),
+        "review_date": "2026-02-17", "validation_date": "2026-02-17",
+        "validator": "nic", "total_findings": 1,
+        "severity_distribution": {"Critical": 1, "Important": 0, "Minor": 0},
+        "false_positive_rate": 0.0, "skill_version": "v1"
+    }
+    (tmp_path / "critical_findings.jsonl").write_text(json.dumps(finding) + "\n")
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata))
+
+    with pytest.raises(ValueError, match="reviewer_filter='scope-guardian' returned 0 findings"):
+        load_validated_findings(str(tmp_path), reviewer_filter="scope-guardian")
+
+
+def test_load_validated_findings_reviewer_filter_returns_subset(tmp_path):
+    """reviewer_filter returns only matching reviewer's findings."""
+    findings = [
+        {
+            "type": "finding", "id": "f-001", "title": "A",
+            "severity": "Critical", "validation_status": "real_flaw",
+            "reviewer": "assumption-hunter"
+        },
+        {
+            "type": "finding", "id": "f-002", "title": "B",
+            "severity": "Critical", "validation_status": "real_flaw",
+            "reviewer": "scope-guardian"
+        },
+    ]
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Doc")
+    metadata = {
+        "source_review": "test", "design_doc_path": str(doc),
+        "review_date": "2026-02-17", "validation_date": "2026-02-17",
+        "validator": "nic", "total_findings": 2,
+        "severity_distribution": {"Critical": 2, "Important": 0, "Minor": 0},
+        "false_positive_rate": 0.0, "skill_version": "v1"
+    }
+    lines = "\n".join(json.dumps(f) for f in findings) + "\n"
+    (tmp_path / "critical_findings.jsonl").write_text(lines)
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata))
+
+    dataset = load_validated_findings(str(tmp_path), reviewer_filter="assumption-hunter")
+    ids = [f["id"] for f in dataset[0].metadata["expected_findings"]]
+    assert ids == ["f-001"]
+    assert "f-002" not in ids
