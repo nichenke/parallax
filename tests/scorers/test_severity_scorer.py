@@ -79,6 +79,23 @@ def test_match_findings_no_id_field_does_not_raise():
     assert isinstance(result, list)
 
 
+def test_match_findings_two_id_less_actuals_match_independently():
+    """Two id-less actual findings must each be independently matchable.
+
+    Before fix: consumed_actual_ids uses None as the key for all id-less
+    findings. Once the first is consumed (None added to set), the second is
+    skipped via `if act_id in consumed_actual_ids`, silently failing to match.
+    """
+    exp1 = {"id": "v3-test-001", "title": "Ground truth validity assumed", "severity": "Critical"}
+    exp2 = {"id": "v3-test-002", "title": "API key security undefined", "severity": "Critical"}
+    actual1 = {"title": "Ground truth validity assumed", "severity": "Critical"}  # no id, matches exp1
+    actual2 = {"title": "API key security undefined", "severity": "Critical"}     # no id, matches exp2
+
+    detected, consumed = match_findings(actual=[actual1, actual2], expected=[exp1, exp2])
+
+    assert len(detected) == 2
+
+
 def test_calculate_metrics_perfect():
     recall, precision, f1 = calculate_metrics(detected=3, actual=3, expected=3)
     assert recall == pytest.approx(1.0)

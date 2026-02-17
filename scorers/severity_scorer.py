@@ -8,22 +8,33 @@ def _title_similarity(a: str, b: str) -> float:
     return SequenceMatcher(None, a.lower(), b.lower()).ratio()
 
 
+def _actual_key(finding: dict) -> str | int:
+    """Unique tracking key for an actual finding.
+
+    Uses the finding's id string when present. Falls back to object identity
+    (id(finding)) so that multiple id-less findings each get a distinct key
+    and do not collide on None in the consumed set.
+    """
+    raw_id = finding.get("id")
+    return raw_id if raw_id is not None else id(finding)
+
+
 def match_findings(
     actual: list[dict], expected: list[dict]
-) -> tuple[list[dict], set[str | None]]:
+) -> tuple[list[dict], set[str | int]]:
     """
     Match actual review findings to expected ground truth findings.
     Strategy: exact ID match first, fuzzy title match fallback (>=0.8 similarity).
     Each actual finding can only satisfy one expected finding (no double-counting).
 
     Returns:
-        (matched_expected, consumed_actual_ids) — the list of matched expected
-        findings and the set of actual finding IDs that were consumed.
-        consumed_actual_ids is needed by callers to compute false positives
+        (matched_expected, consumed_actual_keys) — the list of matched expected
+        findings and the set of _actual_key() values that were consumed.
+        consumed_actual_keys is needed by callers to compute false positives
         correctly after fuzzy matching, where actual IDs differ from expected IDs.
     """
     matched = []
-    consumed_actual_ids: set[str | None] = set()
+    consumed_actual_keys: set[str | int] = set()
     actual_ids = {f.get("id") for f in actual}
 
     for exp in expected:
@@ -31,25 +42,25 @@ def match_findings(
 
         # Exact ID match — consume that actual finding
         if exp_id in actual_ids:
-            if exp_id not in consumed_actual_ids:
+            if exp_id not in consumed_actual_keys:
                 matched.append(exp)
-                consumed_actual_ids.add(exp_id)
+                consumed_actual_keys.add(exp_id)
             continue
 
         # Fuzzy title match fallback — consume first unused actual that matches
         for act in actual:
-            act_id = act.get("id")
-            if act_id in consumed_actual_ids:
+            act_key = _actual_key(act)
+            if act_key in consumed_actual_keys:
                 continue
             if (
                 act.get("severity") == exp.get("severity")
                 and _title_similarity(act.get("title", ""), exp.get("title", "")) >= 0.8
             ):
                 matched.append(exp)
-                consumed_actual_ids.add(act_id)
+                consumed_actual_keys.add(act_key)
                 break
 
-    return matched, consumed_actual_ids
+    return matched, consumed_actual_keys
 
 
 def calculate_metrics(detected: int, actual: int, expected: int) -> tuple[float, float, float]:
@@ -83,7 +94,7 @@ def severity_calibration(recall_threshold: float = 0.90, precision_threshold: fl
         missed = [f["id"] for f in expected_findings if f not in detected]
         false_positives = [
             f.get("id", f.get("title")) for f in actual_findings
-            if f.get("id") not in consumed_actual_ids
+            if _actual_key(f) not in consumed_actual_ids
         ]
 
         return Score(
