@@ -475,10 +475,9 @@
             `;
 
             // Restore selected status if this finding was already validated
+            // Only reset if we're navigating to a different finding
             if (isValidated && finding.validation_status) {
                 selectedStatus = finding.validation_status;
-            } else {
-                selectedStatus = null;
             }
 
             updateProgress();
