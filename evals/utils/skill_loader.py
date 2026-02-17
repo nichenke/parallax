@@ -22,5 +22,7 @@ def drop_section(content: str, section_header: str) -> str:
     """
     # Determine heading level from header
     level = len(section_header) - len(section_header.lstrip("#"))
-    pattern = rf"(?m)^{re.escape(section_header)}.*?(?=^{'#' * level} |\Z)"
+    # Anchor to end of header line (\n) to prevent matching prefix-named sections
+    # e.g. "## Personas" must not match "## Personas Extended"
+    pattern = rf"(?m)^{re.escape(section_header)}\n.*?(?=^{'#' * level} |\Z)"
     return re.sub(pattern, "", content, flags=re.DOTALL).strip()

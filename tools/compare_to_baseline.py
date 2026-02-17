@@ -37,7 +37,8 @@ def _extract_metrics(run: dict) -> dict:
 def compare_runs(
     baseline: dict,
     current: dict,
-    threshold: float = FAIL_THRESHOLD
+    threshold: float = FAIL_THRESHOLD,
+    warn_threshold: float = WARN_THRESHOLD,
 ) -> tuple[RegressionStatus, dict]:
     b = _extract_metrics(baseline)
     c = _extract_metrics(current)
@@ -47,7 +48,7 @@ def compare_runs(
 
     if worst_drop < -threshold:
         status = RegressionStatus.FAIL
-    elif worst_drop < -(threshold / 2):
+    elif worst_drop < -warn_threshold:
         status = RegressionStatus.WARN
     else:
         status = RegressionStatus.PASS

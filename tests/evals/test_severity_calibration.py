@@ -29,3 +29,13 @@ def test_drop_section_nonexistent_is_noop():
     content = "# Skill\n\n## Verdict Logic\nIf critical..."
     result = drop_section(content, "## Nonexistent Section")
     assert result == content
+
+
+def test_drop_section_does_not_remove_prefix_matched_sections():
+    """Dropping '## Personas' must not remove '## Personas Extended' (prefix match bug)."""
+    content = "## Personas\ncontent\n\n## Personas Extended\nother content\n\n## Verdict Logic\nlogic"
+    result = drop_section(content, "## Personas")
+    assert "## Personas Extended" in result
+    assert "other content" in result
+    assert "## Verdict Logic" in result
+    assert "## Personas\n" not in result

@@ -54,6 +54,25 @@ def test_match_findings_partial_set():
     assert "v3-test-003" in ids
 
 
+def test_match_findings_one_actual_cannot_satisfy_two_expected():
+    """One actual finding must not match two similar expected findings (double-count)."""
+    exp_a = {"id": "v3-test-001", "title": "Ground truth validity assumed", "severity": "Critical", "issue": ""}
+    exp_b = {"id": "v3-test-002", "title": "Ground truth validity assumption", "severity": "Critical", "issue": ""}
+    actual = [{"id": "v3-fresh-001", "title": "Ground truth validity assumed", "severity": "Critical", "issue": ""}]
+    detected = match_findings(actual=actual, expected=[exp_a, exp_b])
+    # One actual finding should only satisfy one expected finding
+    assert len(detected) == 1
+
+
+def test_match_findings_no_id_field_does_not_raise():
+    """Actual findings missing id field should not raise KeyError."""
+    malformed = {"title": "Some finding", "severity": "Critical", "issue": "missing id"}
+    expected = [FINDING_A]
+    # Should not raise, should return empty (no match by ID, and title differs enough)
+    result = match_findings(actual=[malformed], expected=expected)
+    assert isinstance(result, list)
+
+
 def test_calculate_metrics_perfect():
     recall, precision, f1 = calculate_metrics(detected=3, actual=3, expected=3)
     assert recall == pytest.approx(1.0)

@@ -10,23 +10,33 @@ def match_findings(actual: list[dict], expected: list[dict]) -> list[dict]:
     """
     Match actual review findings to expected ground truth findings.
     Strategy: exact ID match first, fuzzy title match fallback (>=0.8 similarity).
+    Each actual finding can only satisfy one expected finding (no double-counting).
     """
     matched = []
-    actual_ids = {f["id"] for f in actual}
+    consumed_actual_ids: set[str | None] = set()
+    actual_ids = {f.get("id") for f in actual}
 
     for exp in expected:
-        # Exact ID match
-        if exp["id"] in actual_ids:
-            matched.append(exp)
+        exp_id = exp["id"]
+
+        # Exact ID match — consume that actual finding
+        if exp_id in actual_ids:
+            if exp_id not in consumed_actual_ids:
+                matched.append(exp)
+                consumed_actual_ids.add(exp_id)
             continue
 
-        # Fuzzy title match fallback
+        # Fuzzy title match fallback — consume first unused actual that matches
         for act in actual:
+            act_id = act.get("id")
+            if act_id in consumed_actual_ids:
+                continue
             if (
                 act.get("severity") == exp.get("severity")
                 and _title_similarity(act.get("title", ""), exp.get("title", "")) >= 0.8
             ):
                 matched.append(exp)
+                consumed_actual_ids.add(act_id)
                 break
 
     return matched

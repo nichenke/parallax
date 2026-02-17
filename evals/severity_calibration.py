@@ -1,3 +1,4 @@
+from pathlib import Path
 from inspect_ai import Task, task
 from inspect_ai.solver import generate, system_message
 
@@ -6,7 +7,7 @@ from evals.utils.skill_loader import load_skill_content
 from scorers.severity_scorer import severity_calibration
 
 
-DATASET_PATH = "datasets/v3_review_validated"
+DATASET_PATH = Path(__file__).parent.parent / "datasets" / "v3_review_validated"
 
 
 @task

@@ -1,6 +1,6 @@
 import json
 from pathlib import Path
-from inspect_ai.dataset import MemoryDataset, Sample
+from inspect_ai.dataset import MemoryDataset, Sample, Dataset
 
 
 def count_by_severity(findings: list[dict]) -> dict:
