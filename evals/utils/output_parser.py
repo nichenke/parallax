@@ -5,6 +5,12 @@ def strip_fences(text: str) -> str:
     """
     Remove markdown code fences from text, returning only the inner content.
     Handles both ```json and plain ``` fences.
+
+    Uses a filter approach (drop fence-marker lines) rather than a stateful
+    toggle (drop content between markers). In the eval context this is sufficient:
+    any non-JSONL content that survives stripping will fail json.loads() and be
+    skipped by the parser. An unclosed fence is also handled correctly — content
+    after an unclosed opening marker is preserved rather than silently dropped.
     """
     return "\n".join(
         line for line in text.splitlines()

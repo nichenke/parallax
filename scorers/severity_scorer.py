@@ -81,7 +81,7 @@ def severity_calibration(recall_threshold: float = 0.90, precision_threshold: fl
         actual_findings = parse_review_output(state.output.completion, severity_filter="Critical")
         expected_findings = state.metadata.get("expected_findings", [])
 
-        detected, consumed_actual_ids = match_findings(actual=actual_findings, expected=expected_findings)
+        detected, consumed_actual_keys = match_findings(actual=actual_findings, expected=expected_findings)
 
         recall, precision, f1 = calculate_metrics(
             detected=len(detected),
@@ -94,7 +94,7 @@ def severity_calibration(recall_threshold: float = 0.90, precision_threshold: fl
         missed = [f["id"] for f in expected_findings if f not in detected]
         false_positives = [
             f.get("id", f.get("title")) for f in actual_findings
-            if _actual_key(f) not in consumed_actual_ids
+            if _actual_key(f) not in consumed_actual_keys
         ]
 
         return Score(

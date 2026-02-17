@@ -140,8 +140,9 @@ def test_load_validated_findings_input_is_document_content(tmp_path):
 
 
 def test_real_ground_truth_loads_correctly():
-    """Real dataset must load 9 validated findings — catches empty file, corrupt JSONL, or wrong count."""
-    dataset = load_validated_findings("datasets/inspect-ai-integration-requirements-light")
+    """Real dataset must load 10 validated findings — catches empty file, corrupt JSONL, or wrong count."""
+    dataset_path = Path(__file__).parent.parent.parent.parent / "datasets" / "inspect-ai-integration-requirements-light"
+    dataset = load_validated_findings(str(dataset_path))
     sample = dataset[0]
     findings = sample.metadata["expected_findings"]
     assert len(findings) == 10

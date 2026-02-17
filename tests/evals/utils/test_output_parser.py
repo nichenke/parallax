@@ -73,3 +73,16 @@ def test_parse_review_output_handles_fenced_input():
     findings = parse_review_output(fenced)
     assert len(findings) == 1
     assert findings[0]["id"] == "v1-test-001"
+
+
+def test_strip_fences_unclosed_fence_preserves_content():
+    """Unclosed fence: content after the opening marker is preserved (not dropped).
+
+    The filter approach drops only fence-marker lines, so an unclosed opening
+    fence leaves the JSONL content intact. This is intentional — it is more
+    permissive than a stateful toggle, which would silently drop everything
+    after an unclosed marker.
+    """
+    unclosed = '```json\n{"type": "finding", "id": "v1-test-001"}'
+    result = strip_fences(unclosed)
+    assert '{"type": "finding", "id": "v1-test-001"}' in result
