@@ -10,6 +10,9 @@ setup:
 	. $(VENV) && pip install -e ".[dev]"
 	mkdir -p logs/ evals/baselines/
 
+install:
+	. $(VENV) && pip install -e ".[dev]" -q
+
 ## ── Ground truth (run after significant design changes) ────────────────────
 
 review:
@@ -80,5 +83,6 @@ help:
 	@echo "Other:"
 	@echo "  make test        Run unit tests"
 	@echo "  make setup       Create venv and install dependencies"
+	@echo "  make install     Reinstall dependencies into existing venv"
 
-.PHONY: setup review validate eval reviewer-eval ablation baseline regression view cycle test help
+.PHONY: setup install review validate eval reviewer-eval ablation baseline regression view cycle test help
