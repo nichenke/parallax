@@ -1,5 +1,8 @@
 .worktrees/
 venv/
-datasets/
 __pycache__/
 *.pyc
+.venv-evals/
+logs/
+evals/baselines/
+.pytest_cache/
