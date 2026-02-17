@@ -144,7 +144,7 @@ def test_real_ground_truth_loads_correctly():
     dataset = load_validated_findings("datasets/inspect-ai-integration-requirements-light")
     sample = dataset[0]
     findings = sample.metadata["expected_findings"]
-    assert len(findings) == 9
+    assert len(findings) == 10
     assert all(f["validation_status"] == "real_flaw" for f in findings)
     assert all(f["severity"] == "Critical" for f in findings)
 
