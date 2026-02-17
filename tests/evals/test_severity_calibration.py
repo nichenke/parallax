@@ -1,6 +1,7 @@
 import pytest
 from pathlib import Path
 from evals.utils.skill_loader import load_skill_content, drop_section
+from evals.severity_calibration import severity_calibration_eval
 
 
 def test_load_skill_content_returns_string(tmp_path):
@@ -15,6 +16,18 @@ def test_load_skill_content_returns_string(tmp_path):
 def test_load_skill_content_missing_raises(tmp_path):
     with pytest.raises(FileNotFoundError):
         load_skill_content("nonexistent:skill", skills_root=str(tmp_path))
+
+
+def test_load_skill_content_real_skills_directory():
+    """skill_loader must find skills using directory names, not plugin-qualified names."""
+    content = load_skill_content("requirements")  # real dir: skills/requirements/SKILL.md
+    assert len(content) > 0
+
+
+def test_severity_calibration_eval_instantiates():
+    """The eval task must instantiate without error — catches wrong skill name at task load time."""
+    task = severity_calibration_eval()
+    assert task is not None
 
 
 def test_drop_section_removes_target():

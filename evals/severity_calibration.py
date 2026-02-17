@@ -19,7 +19,7 @@ def severity_calibration_eval() -> Task:
     return Task(
         dataset=load_validated_findings(DATASET_PATH),
         plan=[
-            system_message(load_skill_content("parallax:requirements")),
+            system_message(load_skill_content("requirements")),
             generate()
         ],
         scorer=severity_calibration(),
