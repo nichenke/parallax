@@ -118,6 +118,88 @@ def assumption_hunter_eval() -> Task:
 
 ---
 
+## Scoring Strategy (ADR-007)
+
+> **Note:** The original `severity_calibration` scorer (cross-run fuzzy matching against expected findings) is superseded by the two-tier approach described here. See ADR-007 for full rationale and prototype evidence.
+
+### Why cross-run matching fails
+
+The eval framework showed accuracy=0.000 with both string fuzzy match and LLM-as-judge (expected → actual direction). Session 30 diagnostic confirmed two root causes:
+
+1. **Context contamination:** Ground truth captured in interactive sessions with MEMORY.md loaded. Some golden findings require project context not in the frozen document — clean eval runs structurally cannot reproduce them.
+2. **Genuine run-to-run variance:** Independent review sessions emphasise different document angles. The model finds legitimately different-but-valid flaws each run. This is not a failure — it is the genuine-difference problem.
+
+The right question is not "did you find what we expected?" but "are your findings real?"
+
+### Tier 1: `reverse_judge_precision` (primary quality signal)
+
+For each actual finding the reviewer produces, ask an external Haiku judge: **"Is this a genuine flaw in this document?"**
+
+Score = `real_findings / total_findings` (precision). Averaged across samples by Inspect AI's `mean()`.
+
+**Judge runs at T=0** (deterministic evaluation tool). **Reviewer runs at model default (~T=1.0)** to match production behaviour.
+
+**Pass full document to judge** — do not truncate. Haiku has 200K context. Truncation causes false NOs for findings that reference the second half of the document (confirmed in prototype: precision jumped from 0.22 → 1.00 after removing 6000-char cap).
+
+**Encoded criteria — GENUINE:**
+- Identifies a specific, nameable gap, inconsistency, or invalid assumption
+- The problem is real and non-hallucinated — actually present in or absent from the document
+- Discoverable from the document content alone (no external context required)
+
+Severity is separate from genuineness. A finding can be genuine and Minor. The "logic bomb / materially affects success" framing belongs in the Critical severity definition — applying it to the genuineness gate would penalise well-calibrated reviewers that correctly flag Minor issues.
+
+**Encoded false positives — NOT genuine:**
+- Implementation detail rather than a requirement/design gap (what vs. how confusion)
+- Assumes a constraint the document never states (hallucinated requirement)
+- Style or completeness preference without a specific structural gap
+- Hypothetical future concern rather than a current document problem
+- Duplicates another finding from a different angle without adding new information
+- References external context not present in the document under review
+
+This explicit false positive list mirrors the code-review plugin's approach and must be encoded in the judge system prompt.
+
+### Tier 2: `must_find_recall` (regression guard)
+
+Against a curated `must_find.jsonl` per dataset: what fraction of must-find findings did the reviewer detect? The LLM judge (expected → actual direction) is used here — same judge, different question.
+
+**Curation rules for `must_find.jsonl`:**
+- Only include findings discoverable from the frozen document content alone
+- No size ceiling — reflects actual document quality debt
+- Each finding carries `min_recall` threshold (high for unambiguous, lower for subtle)
+- Context-dependent excluded findings go to `context_dependent_findings.jsonl` (reviewer coverage improvement backlog — see Issue #68, Issue #69)
+
+**MVP behaviour:** Single global threshold, `min_recall` not enforced, found/not-found reported per finding as diagnostic. Threshold enforcement requires N≥3 runs (deferred to Phase 2).
+
+### Dataset schema additions
+
+```
+datasets/<dataset>/
+  critical_findings.jsonl          # existing — full validated finding set
+  must_find.jsonl                  # NEW: curated regression guard list
+  context_dependent_findings.jsonl # NEW: excluded context-dependent findings
+  metadata.json                    # existing — updated to reference new files
+```
+
+`must_find.jsonl` entry format:
+```jsonl
+{"id": "pf-001", "title": "...", "issue": "...", "severity": "Critical", "min_recall": 0.90}
+```
+
+`context_dependent_findings.jsonl` entry format:
+```jsonl
+{"id": "cf-002", "title": "...", "required_context": "Work uses Bedrock IAM; personal uses direct API env vars — in MEMORY.md, not the doc", "reviewer": "constraint-finder"}
+```
+
+### Updated scorer wiring
+
+```python
+scorer=[reverse_judge_precision(), must_find_recall()]
+```
+
+Both scorers run on every eval task. `severity_calibration` and `llm_judge_match` are retired after full implementation.
+
+---
+
 ## JSONL Output Alignment
 
 ### Phase 1 Prerequisites (Audit Gate)
@@ -242,7 +324,7 @@ Phase 1 is complete when:
 
 1. **No crashes:** `make reviewer-eval` runs to completion — all 5 tasks instantiate and complete without exceptions
 2. **Parseable output:** All 5 agents produce at least some parseable JSONL (zero tasks return a parse error on every finding)
-3. **Basic detection:** At least 3 of 5 reviewer tasks produce recall > 0.0 (agent is detecting something)
+3. **Basic detection:** At least 3 of 5 reviewer tasks produce non-zero `reverse_judge_precision` (agent is finding genuine flaws, not just hallucinating or producing empty output). Note: `must_find_recall` requires `must_find.jsonl` which is Phase 2 — do not use recall as a Phase 1 gate.
 4. **Tests pass:** `make test` passes with new tests for `agent_loader`, `reviewer_filter`, and per-reviewer task instantiation
 
 **What Phase 1 does not validate:** Recall accuracy, precision, or prompt quality. Those are Phase 2 after ground truth expansion.
@@ -257,11 +339,16 @@ Phase 1 is complete when:
 
 ## Phase 2 Design Prerequisites (not in Phase 1)
 
-Before Phase 2 (LLM-as-judge quality scoring):
-1. Phase 1 produces non-zero accuracy on at least one reviewer task
-2. Quality rubric defined and documented (FR-QUALITY-1). Target aggregate quality score: ≥3.5/5.0 (provisional — adjust after Phase 2 baseline run)
-3. Rubric validated with ground truth examples (5/5 and 1/5 examples per dimension)
-4. Grader model selected (Haiku for cost, Sonnet for quality — start with Sonnet, optimize later)
+Before Phase 2 (two-tier scoring — ADR-007):
+1. Phase 1 produces non-zero `reverse_judge_precision` on at least one reviewer task
+2. `must_find.jsonl` curated for each dataset (document-visible findings only, `min_recall` annotated)
+3. `context_dependent_findings.jsonl` populated with excluded findings + required_context notes
+4. Full implementation of `reverse_judge_precision` and `must_find_recall` scorers (prototype in `scorers/reverse_judge_scorer.py` is throwaway)
+
+Before Phase 2.5 (N=3 multi-run recall):
+1. Phase 2 two-tier scorers stable
+2. `min_recall` thresholds populated in `must_find.jsonl`
+3. Makefile updated to run N=3 per eval cycle and aggregate results
 
 Before Phase 1.5 (multi-model comparison):
 1. Phase 1 non-zero accuracy on Anthropic
@@ -279,7 +366,7 @@ Skills are orchestration scripts (ask questions, dispatch agents, write to disk)
 The scorer (`output_parser.py`) expects JSONL. Markdown requires a conversion step that introduces noise (section parsing, title extraction). JSONL is deterministic. The tradeoff (less readable for humans) is acceptable for eval context — Inspect View shows raw output alongside scores.
 
 **Why keep severity_calibration.py?**
-The original combined task remains for comparison. It's useful as a regression signal for the orchestration layer (if the skill ever produces parseable output in eval context, we'd want to know). It also keeps ablation_tests.py functional (which still references the combined task pattern).
+The file is retained but its wiring in `reviewer_eval.py` is removed. `ablation_tests.py` still references the combined task pattern — update `ablation_tests.py` to use `reverse_judge_precision` before removing `severity_calibration` from the codebase entirely. Do not delete the file until ablation tests are verified working with the new scorer.
 
 **Why exclude post-review finding from per-reviewer tasks?**
 `v1-post-review-001` (skill/eval interface mismatch) was discovered during implementation, not by any reviewer reading the requirements document. No reviewer agent would detect it by reading requirements-v1.md — it requires knowing how parallax skills actually work. Excluding it keeps per-reviewer ground truth honest: each task only tests what that agent could plausibly detect.
