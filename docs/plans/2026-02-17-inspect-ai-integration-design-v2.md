@@ -143,8 +143,10 @@ Score = `real_findings / total_findings` (precision). Averaged across samples by
 
 **Encoded criteria — GENUINE:**
 - Identifies a specific, nameable gap, inconsistency, or invalid assumption
-- That gap materially affects whether the design/plan can succeed — including logic bombs that make success improbable until resolved, not just editorial gaps
+- The problem is real and non-hallucinated — actually present in or absent from the document
 - Discoverable from the document content alone (no external context required)
+
+Severity is separate from genuineness. A finding can be genuine and Minor. The "logic bomb / materially affects success" framing belongs in the Critical severity definition — applying it to the genuineness gate would penalise well-calibrated reviewers that correctly flag Minor issues.
 
 **Encoded false positives — NOT genuine:**
 - Implementation detail rather than a requirement/design gap (what vs. how confusion)
@@ -322,7 +324,7 @@ Phase 1 is complete when:
 
 1. **No crashes:** `make reviewer-eval` runs to completion — all 5 tasks instantiate and complete without exceptions
 2. **Parseable output:** All 5 agents produce at least some parseable JSONL (zero tasks return a parse error on every finding)
-3. **Basic detection:** At least 3 of 5 reviewer tasks produce recall > 0.0 (agent is detecting something)
+3. **Basic detection:** At least 3 of 5 reviewer tasks produce non-zero `reverse_judge_precision` (agent is finding genuine flaws, not just hallucinating or producing empty output). Note: `must_find_recall` requires `must_find.jsonl` which is Phase 2 — do not use recall as a Phase 1 gate.
 4. **Tests pass:** `make test` passes with new tests for `agent_loader`, `reviewer_filter`, and per-reviewer task instantiation
 
 **What Phase 1 does not validate:** Recall accuracy, precision, or prompt quality. Those are Phase 2 after ground truth expansion.
@@ -364,7 +366,7 @@ Skills are orchestration scripts (ask questions, dispatch agents, write to disk)
 The scorer (`output_parser.py`) expects JSONL. Markdown requires a conversion step that introduces noise (section parsing, title extraction). JSONL is deterministic. The tradeoff (less readable for humans) is acceptable for eval context — Inspect View shows raw output alongside scores.
 
 **Why keep severity_calibration.py?**
-The original combined task remains for comparison. It's useful as a regression signal for the orchestration layer (if the skill ever produces parseable output in eval context, we'd want to know). It also keeps ablation_tests.py functional (which still references the combined task pattern).
+The file is retained but its wiring in `reviewer_eval.py` is removed. `ablation_tests.py` still references the combined task pattern — update `ablation_tests.py` to use `reverse_judge_precision` before removing `severity_calibration` from the codebase entirely. Do not delete the file until ablation tests are verified working with the new scorer.
 
 **Why exclude post-review finding from per-reviewer tasks?**
 `v1-post-review-001` (skill/eval interface mismatch) was discovered during implementation, not by any reviewer reading the requirements document. No reviewer agent would detect it by reading requirements-v1.md — it requires knowing how parallax skills actually work. Excluding it keeps per-reviewer ground truth honest: each task only tests what that agent could plausibly detect.

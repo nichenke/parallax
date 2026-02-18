@@ -53,8 +53,10 @@ For each actual finding in the reviewer's output, ask an external judge: "Is thi
 
 **Encoded criteria — a finding is GENUINE if:**
 - It identifies a specific, nameable gap, inconsistency, or invalid assumption in the document
-- That gap materially affects whether the design/plan can succeed (including logic bombs that make success improbable until resolved — not just editorial fixes)
+- It is real and non-hallucinated — the problem it describes is actually present in or absent from the document
 - It is discoverable from the document content alone without external context
+
+Note: severity (how bad is it) is separate from genuineness (is it real). A finding can be genuine and Minor. The "logic bomb" / "materially affects success" framing belongs in the Critical severity definition, not the genuineness gate — applying it here would cause well-calibrated reviewers that correctly flag Minor issues to score lower precision than reviewers that inflate everything to critical.
 
 **Encoded false positive list — a finding is NOT genuine if:**
 - It describes an implementation detail rather than a requirement/design gap (what vs. how confusion)
@@ -108,6 +110,9 @@ Against a curated `must_find.jsonl` per dataset: what fraction of must-find find
 - Must-find guard catches coverage regression without requiring comprehensive ground truth enumeration
 - Ground truth capture workflow is lighter — curate must-find (small, stable), note context-dependent findings, done
 - No cross-run comparison infrastructure needed for primary metric
+
+**Known limitation — precision detects hallucination, not coverage regression:**
+`reverse_judge_precision` can only detect when a reviewer *starts* producing false findings. It cannot detect when a reviewer *stops* finding findings — a reviewer that degrades from 10 genuine findings to 2 genuine findings scores the same 100% precision. Coverage regression is the responsibility of `must_find_recall`, not precision. This asymmetry must be understood when interpreting results: high precision + low must-find recall = reviewer is being conservative, not hallucinating. Low precision = reviewer is hallucinating regardless of coverage.
 
 **Negative:**
 - Requires full implementation cycle: new scorers, must-find curation, context_dependent log, updated dataset schema
