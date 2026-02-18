@@ -25,6 +25,10 @@ The name comes from parallax — the apparent shift in an object's position when
 - A pre-commit hook enforces this (see `hooks/pre-commit`)
 - New clones: Run `git config core.hooksPath hooks` to enable the hook
 
+## Worktree Workflow
+
+Always `cd` to the worktree first via a full absolute path (`cd /full/path && ...`) so all subsequent commands run in the correct context. Never use `make -C` or relative paths like `.worktrees/...` — they fail when shell CWD doesn't match.
+
 ## Subagent Tool Discipline
 
 Subagents inherit these rules. **Use dedicated tools, not bash equivalents:**
