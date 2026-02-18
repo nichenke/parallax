@@ -109,16 +109,19 @@ def test_reverse_judge_one_passes_full_document_to_judge():
 
 
 def test_reverse_judge_one_includes_false_positive_criteria_in_prompt():
-    """Judge prompt contains explicit false positive categories from ADR-007."""
+    """Judge prompt contains all 6 explicit false positive categories from ADR-007."""
     model = make_mock_model("GENUINE\nOk.")
     asyncio.run(_reverse_judge_one(model, GENUINE_FINDING, DOC_CONTENT))
     call_args = model.generate.call_args
     messages = call_args[0][0]
     combined = " ".join(m.content for m in messages)
-    # ADR-007 false positive categories must appear in the judge prompt
+    # All 6 ADR-007 false positive categories must appear in the judge prompt
     assert "implementation detail" in combined.lower()
     assert "hallucinated" in combined.lower()
     assert "style preference" in combined.lower() or "stylistic" in combined.lower()
+    assert "hypothetical" in combined.lower()
+    assert "duplicate" in combined.lower()
+    assert "context-dependent" in combined.lower() or "context dependent" in combined.lower()
 
 
 def test_reverse_judge_one_includes_finding_in_prompt():
