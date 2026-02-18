@@ -64,13 +64,19 @@ def load_validated_findings(
         doc_path = base / doc_path
     doc_content = doc_path.read_text()
 
+    # Load must-find list if present (optional — graceful skip if not yet curated)
+    must_find_path = base / "must_find.jsonl"
+    must_find_findings = read_jsonl(must_find_path) if must_find_path.exists() else None
+
     sample = Sample(
         input=doc_content,
         target=[f["id"] for f in real_flaws],
         metadata={
             **metadata,
             "expected_findings": real_flaws,
-            "severity_distribution": count_by_severity(real_flaws)
+            "severity_distribution": count_by_severity(real_flaws),
+            "doc_content": doc_content,
+            "must_find_findings": must_find_findings,
         }
     )
 

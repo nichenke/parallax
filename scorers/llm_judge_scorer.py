@@ -1,3 +1,5 @@
+# DEPRECATED: replaced by must_find_recall() (ADR-007 / Issue #71).
+# Kept for reference. Do not use in reviewer_eval.py.
 """
 LLM-as-judge scorer for finding detection.
 
