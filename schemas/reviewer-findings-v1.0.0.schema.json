@@ -12,7 +12,7 @@
   "$defs": {
     "finding": {
       "type": "object",
-      "required": ["type", "id", "title", "severity", "phase", "section", "issue", "why_it_matters", "suggestion"],
+      "required": ["type", "id", "title", "severity", "confidence", "phase", "section", "issue", "why_it_matters", "suggestion"],
       "properties": {
         "type": { "const": "finding" },
         "id": {
@@ -24,6 +24,12 @@
         "severity": {
           "type": "string",
           "enum": ["Critical", "Important", "Minor"]
+        },
+        "confidence": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Reviewer self-scored confidence (0-100). Synthesizer filters out findings below 80."
         },
         "phase": {
           "type": "object",

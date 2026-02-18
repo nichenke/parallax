@@ -1,2 +1,2 @@
-{"type": "finding", "id": "v3-assumption-hunter-001", "title": "Test Finding", "severity": "Critical", "phase": {"primary": "design", "contributing": null}, "section": "Test Section", "issue": "This is a test issue", "why_it_matters": "Testing", "suggestion": "Fix it"}
+{"type": "finding", "id": "v3-assumption-hunter-001", "title": "Test Finding", "severity": "Critical", "confidence": 85, "phase": {"primary": "design", "contributing": null}, "section": "Test Section", "issue": "This is a test issue", "why_it_matters": "Testing", "suggestion": "Fix it"}
 {"type": "blind_spot_check", "content": "I may have missed implementation details."}

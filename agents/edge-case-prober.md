@@ -64,6 +64,7 @@ Write your findings as structured markdown:
 
 ### Finding N: [Title]
 - **Severity:** Critical | Important | Minor
+- **Confidence:** 85/100
 - **Phase:** [primary phase] (primary), [contributing phase] (contributing, if applicable)
 - **Section:** [which part of the design]
 - **Issue:** [what edge case or failure mode was found]
@@ -78,6 +79,21 @@ Write your findings as structured markdown:
 - **Critical:** Unhandled failure mode that causes data loss, corruption, or complete system failure.
 - **Important:** Edge case that degrades user experience significantly or causes silent errors.
 - **Minor:** Uncommon edge case worth documenting but unlikely to cause real harm.
+
+**Before scoring confidence, rule out false positives. Do NOT report findings that:**
+- Are implementation details rather than design or requirement gaps
+- Reference requirements or constraints not present in the document (hallucinated constraints)
+- Express style preferences with no structural impact
+- Speculate about hypothetical future concerns not relevant to the current document
+- Duplicate another finding from a different angle without adding new information
+- Require external knowledge (project history, prior sessions) to evaluate — must be assessable from the document alone
+
+**Confidence rubric (0-100 — assign to every finding):**
+- **0**: Not confident — does not stand up to light scrutiny
+- **25**: Somewhat confident — might be real, could not fully verify from document alone
+- **50**: Moderately confident — verified present, but minor or low-frequency in practice
+- **75**: Highly confident — double-checked, directly supported by document evidence, will impact design validity
+- **100**: Certain — confirmed, will definitely cause problems if not addressed
 
 **Phase classification (assign primary, optionally note contributing):**
 - **survey:** Missing research about failure modes in similar systems

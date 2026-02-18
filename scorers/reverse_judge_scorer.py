@@ -197,6 +197,7 @@ def reverse_judge_precision(
             judge_results.append({
                 "finding_id": finding.get("id"),
                 "finding_title": finding.get("title"),
+                "confidence": finding.get("confidence"),
                 "is_genuine": is_genuine,
                 "reasoning": reasoning,
             })
@@ -204,6 +205,14 @@ def reverse_judge_precision(
         total = len(actual_findings)
         precision = genuine_count / total
         not_genuine = [r["finding_title"] for r in judge_results if not r["is_genuine"]]
+
+        # Confidence-stratified precision (calibration diagnostic).
+        # High-confidence findings (≥80) should have near-100% precision if the
+        # reviewer's self-assessment is well-calibrated. Mismatches signal prompt issues.
+        high = [r for r in judge_results if (r["confidence"] or 0) >= 80]
+        low = [r for r in judge_results if (r["confidence"] or 0) < 80]
+        high_precision = sum(1 for r in high if r["is_genuine"]) / len(high) if high else None
+        low_precision = sum(1 for r in low if r["is_genuine"]) / len(low) if low else None
 
         return Score(
             value=precision,
@@ -217,6 +226,16 @@ def reverse_judge_precision(
                 "precision": precision,
                 "not_genuine_titles": not_genuine,
                 "judge_results": judge_results,
+                "confidence_stratified": {
+                    "high_confidence": {
+                        "count": len(high),
+                        "precision": high_precision,
+                    },
+                    "low_confidence": {
+                        "count": len(low),
+                        "precision": low_precision,
+                    },
+                },
             }
         )
 
