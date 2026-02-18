@@ -1,6 +1,6 @@
 #!/bin/sh
 #
-# Pre-commit hook: Prevent direct commits to main branch
+# Pre-commit hook: Prevent direct commits to main branch + scan for secrets
 #
 
 # Get current branch name
@@ -15,4 +15,11 @@ if [ "$branch" = "main" ]; then
     exit 1
 fi
 
-exit 0
+# Scan staged files for secrets
+if ! which gitleaks > /dev/null 2>&1; then
+    echo "ERROR: gitleaks is not installed."
+    echo "Run: make hooks"
+    exit 1
+fi
+
+gitleaks protect --staged --redact --exit-code 1

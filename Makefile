@@ -5,15 +5,11 @@ VENV        := .venv-evals/bin/activate
 
 ## ── Setup ──────────────────────────────────────────────────────────────────
 
-setup:
-	python3 -m venv .venv-evals
-	. $(VENV) && pip install -e ".[dev]"
-	mkdir -p logs/ evals/baselines/
-
 install:
 	@if [ ! -f $(VENV) ]; then python3 -m venv .venv-evals; fi
 	. $(VENV) && pip install -e ".[dev]" -q
 	mkdir -p logs/ evals/baselines/
+	@which gitleaks > /dev/null 2>&1 && echo "gitleaks already installed" || brew install gitleaks
 
 ## ── Ground truth (run after significant design changes) ────────────────────
 
@@ -84,7 +80,6 @@ help:
 	@echo ""
 	@echo "Other:"
 	@echo "  make test        Run unit tests"
-	@echo "  make setup       Create venv and install dependencies"
-	@echo "  make install     Reinstall dependencies into existing venv"
+	@echo "  make install     Install dependencies (venv, pip, gitleaks)"
 
-.PHONY: setup install review validate eval reviewer-eval ablation baseline regression view cycle test help
+.PHONY: install review validate eval reviewer-eval ablation baseline regression view cycle test help
