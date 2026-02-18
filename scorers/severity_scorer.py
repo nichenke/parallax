@@ -24,30 +24,22 @@ def match_findings(
 ) -> tuple[list[dict], set[str | int]]:
     """
     Match actual review findings to expected ground truth findings.
-    Strategy: exact ID match first, fuzzy title match fallback (>=0.8 similarity).
+    Strategy: fuzzy title match (>=0.8 similarity) with severity agreement.
     Each actual finding can only satisfy one expected finding (no double-counting).
+
+    IDs are not used for matching. Finding IDs are session-local sequence numbers
+    assigned independently each run — they are not stable cross-run identifiers.
+    The same flaw found in two runs will have different IDs but similar titles.
 
     Returns:
         (matched_expected, consumed_actual_keys) — the list of matched expected
         findings and the set of _actual_key() values that were consumed.
-        consumed_actual_keys is needed by callers to compute false positives
-        correctly after fuzzy matching, where actual IDs differ from expected IDs.
+        consumed_actual_keys is needed by callers to compute false positives.
     """
     matched = []
     consumed_actual_keys: set[str | int] = set()
-    actual_ids = {f.get("id") for f in actual}
 
     for exp in expected:
-        exp_id = exp["id"]
-
-        # Exact ID match — consume that actual finding
-        if exp_id in actual_ids:
-            if exp_id not in consumed_actual_keys:
-                matched.append(exp)
-                consumed_actual_keys.add(exp_id)
-            continue
-
-        # Fuzzy title match fallback — consume first unused actual that matches
         for act in actual:
             act_key = _actual_key(act)
             if act_key in consumed_actual_keys:

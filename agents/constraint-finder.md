@@ -49,7 +49,7 @@ Produce JSONL findings using this structure:
 ```json
 {
   "type": "finding",
-  "id": "v1-constraint-finder-NNN",
+  "id": "constraint-finder-NNN",
   "title": "Brief finding title",
   "severity": "Critical|Important|Minor",
   "phase": {
@@ -75,7 +75,7 @@ After completing your review, add a meta-finding:
 ```json
 {
   "type": "finding",
-  "id": "v1-constraint-finder-999",
+  "id": "constraint-finder-999",
   "title": "Blind spot check: Constraint Finder perspective",
   "severity": "Minor",
   "phase": {

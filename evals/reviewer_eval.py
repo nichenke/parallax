@@ -19,6 +19,7 @@ from inspect_ai.solver import generate, system_message
 from evals.utils.dataset_loader import load_validated_findings
 from evals.utils.agent_loader import load_agent_content
 from scorers.severity_scorer import severity_calibration
+from scorers.llm_judge_scorer import llm_judge_match
 
 
 _DATASETS = Path(__file__).parent.parent / "datasets"
@@ -34,7 +35,7 @@ def _reviewer_task(reviewer: str, dataset_path: Path) -> Task:
             system_message(load_agent_content(reviewer)),
             generate(),
         ],
-        scorer=severity_calibration(),
+        scorer=[severity_calibration(), llm_judge_match()],
         max_tokens=16000,
     )
 

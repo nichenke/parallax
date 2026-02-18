@@ -49,7 +49,7 @@ Produce JSONL findings using this structure:
 ```json
 {
   "type": "finding",
-  "id": "v1-success-validator-NNN",
+  "id": "success-validator-NNN",
   "title": "Brief finding title",
   "severity": "Critical|Important|Minor",
   "phase": {
@@ -75,7 +75,7 @@ After completing your review, add a meta-finding:
 ```json
 {
   "type": "finding",
-  "id": "v1-success-validator-999",
+  "id": "success-validator-999",
   "title": "Blind spot check: Success Validator perspective",
   "severity": "Minor",
   "phase": {
