@@ -174,6 +174,26 @@ Context compaction is a known constraint. This repo may be worked on from multip
 
 <!-- TODO: Investigate Codex equivalent of opusplan model tiering. Codex CLI may have different model routing. Track in Issue #4. -->
 
+## Eval Design Guardrails
+
+Rules that protect the precision metric from well-intentioned corruption.
+
+### The genuineness gate is binary
+
+The reverse judge scores each finding GENUINE or NOT_GENUINE. Do not introduce partial credit, confidence weighting, or "valuable ambiguity" exceptions. Once you allow NOT_GENUINE findings to score positively because they seem humanly useful, every false positive gets a defense and the precision metric becomes meaningless.
+
+**The right answer for humanly-useful NOT_GENUINE findings:** surface them in the review notes tier (Issue #83) with the judge's reasoning, clearly separated from actionable findings. Keep the gate binary; make the output richer.
+
+### Must_find reconciliation after document freeze
+
+After freezing the source document for an eval dataset, validate every `must_find.jsonl` entry against the frozen document. Any entry the judge calls NOT_GENUINE on the frozen doc must be investigated — the finding may have been valid against an earlier document version but addressed by the time of freeze. Do not assume must_find entries remain valid across document revisions.
+
+**Workflow:** ground truth creation → document freeze → must_find reconciliation pass (judge all entries against frozen doc) → dataset finalized.
+
+### Experiment corpus size
+
+Do not run comparative experiments (prompt A vs. prompt B) with fewer than 10 samples per class. Differences in small-N rates (2/4 vs 0/4) are not statistically distinguishable from noise. Label runs below this threshold as "exploratory" in the write-up and do not derive ADR decisions from accuracy comparisons alone — cost and latency differences remain valid evidence regardless of N.
+
 ## Workflow Preferences
 
 - **Local-first development** — create files locally, test, then commit
