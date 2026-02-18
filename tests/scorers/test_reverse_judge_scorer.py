@@ -60,7 +60,14 @@ ACTUAL_JSONL = (
     '{"type": "finding", "id": "problem-framer-001", '
     '"title": "No success criteria defined", '
     '"issue": "The document has no success criteria section.", '
-    '"severity": "Critical"}'
+    '"severity": "Critical", "confidence": 85}'
+)
+
+ACTUAL_JSONL_LOW_CONFIDENCE = (
+    '{"type": "finding", "id": "problem-framer-002", '
+    '"title": "Low confidence finding", '
+    '"issue": "Uncertain gap in documentation.", '
+    '"severity": "Minor", "confidence": 40}'
 )
 
 
@@ -241,3 +248,98 @@ def test_precision_missing_doc_content_raises_clearly(mock_get_model):
     state.metadata = {}  # no doc_content
     with pytest.raises((KeyError, ValueError)):
         run_scorer(reverse_judge_precision, state)
+
+
+# ── Confidence-stratified precision tests ────────────────────────────────────
+
+
+@patch("scorers.reverse_judge_scorer.get_model")
+def test_precision_metadata_includes_confidence_stratified(mock_get_model):
+    """Score metadata includes confidence_stratified breakdown."""
+    mock_get_model.return_value = make_mock_model("GENUINE\nClear design gap.")
+    state = make_state(ACTUAL_JSONL, DOC_CONTENT)
+    score = run_scorer(reverse_judge_precision, state)
+    assert "confidence_stratified" in score.metadata
+    cs = score.metadata["confidence_stratified"]
+    assert "high_confidence" in cs
+    assert "low_confidence" in cs
+
+
+@patch("scorers.reverse_judge_scorer.get_model")
+def test_confidence_stratified_high_confidence_genuine(mock_get_model):
+    """High-confidence finding (≥80) that is GENUINE → precision 1.0 in high band."""
+    mock_get_model.return_value = make_mock_model("GENUINE\nReal finding.")
+    state = make_state(ACTUAL_JSONL, DOC_CONTENT)  # confidence=85
+    score = run_scorer(reverse_judge_precision, state)
+    cs = score.metadata["confidence_stratified"]
+    assert cs["high_confidence"]["count"] == 1
+    assert cs["high_confidence"]["precision"] == pytest.approx(1.0)
+    assert cs["low_confidence"]["count"] == 0
+    assert cs["low_confidence"]["precision"] is None
+
+
+@patch("scorers.reverse_judge_scorer.get_model")
+def test_confidence_stratified_low_confidence_finding(mock_get_model):
+    """Low-confidence finding (<80) appears only in low band."""
+    mock_get_model.return_value = make_mock_model("NOT_GENUINE\nFalse positive.")
+    state = make_state(ACTUAL_JSONL_LOW_CONFIDENCE, DOC_CONTENT)  # confidence=40
+    score = run_scorer(reverse_judge_precision, state)
+    cs = score.metadata["confidence_stratified"]
+    assert cs["low_confidence"]["count"] == 1
+    assert cs["high_confidence"]["count"] == 0
+    assert cs["high_confidence"]["precision"] is None
+
+
+@patch("scorers.reverse_judge_scorer.get_model")
+def test_confidence_stratified_mixed_bands(mock_get_model):
+    """Mixed high/low confidence findings produce separate precision per band."""
+    responses = ["GENUINE\nReal.", "NOT_GENUINE\nFake."]
+    call_count = 0
+
+    async def alternating(messages, config=None):
+        nonlocal call_count
+        out = MagicMock()
+        out.completion = responses[call_count % len(responses)]
+        call_count += 1
+        return out
+
+    model = MagicMock()
+    model.generate = alternating
+    mock_get_model.return_value = model
+
+    two_findings = "\n".join([ACTUAL_JSONL, ACTUAL_JSONL_LOW_CONFIDENCE])
+    state = make_state(two_findings, DOC_CONTENT)
+    score = run_scorer(reverse_judge_precision, state)
+    cs = score.metadata["confidence_stratified"]
+    # High band: confidence=85 → GENUINE → precision 1.0
+    assert cs["high_confidence"]["count"] == 1
+    assert cs["high_confidence"]["precision"] == pytest.approx(1.0)
+    # Low band: confidence=40 → NOT_GENUINE → precision 0.0
+    assert cs["low_confidence"]["count"] == 1
+    assert cs["low_confidence"]["precision"] == pytest.approx(0.0)
+
+
+@patch("scorers.reverse_judge_scorer.get_model")
+def test_confidence_stratified_no_confidence_field_treated_as_low(mock_get_model):
+    """Finding without confidence field is treated as confidence=0 (low band)."""
+    mock_get_model.return_value = make_mock_model("GENUINE\nOk.")
+    no_confidence_jsonl = (
+        '{"type": "finding", "id": "problem-framer-003", '
+        '"title": "Missing section", '
+        '"issue": "Section is absent.", "severity": "Important"}'
+    )
+    state = make_state(no_confidence_jsonl, DOC_CONTENT)
+    score = run_scorer(reverse_judge_precision, state)
+    cs = score.metadata["confidence_stratified"]
+    assert cs["low_confidence"]["count"] == 1
+    assert cs["high_confidence"]["count"] == 0
+
+
+@patch("scorers.reverse_judge_scorer.get_model")
+def test_per_finding_result_includes_confidence(mock_get_model):
+    """Per-finding judge result includes the confidence value from the finding."""
+    mock_get_model.return_value = make_mock_model("GENUINE\nClear design gap.")
+    state = make_state(ACTUAL_JSONL, DOC_CONTENT)
+    score = run_scorer(reverse_judge_precision, state)
+    result = score.metadata["judge_results"][0]
+    assert result["confidence"] == 85
