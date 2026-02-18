@@ -7,7 +7,7 @@ VENV        := .venv-evals/bin/activate
 
 install:
 	@if [ ! -f $(VENV) ]; then python3 -m venv .venv-evals; fi
-	. $(VENV) && pip install -e ".[dev]" -q
+	.venv-evals/bin/pip install -e ".[dev]" -q
 	mkdir -p logs/ evals/baselines/
 	@which gitleaks > /dev/null 2>&1 && echo "gitleaks already installed" || brew install gitleaks
 
