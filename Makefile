@@ -11,7 +11,9 @@ setup:
 	mkdir -p logs/ evals/baselines/
 
 install:
+	@if [ ! -f $(VENV) ]; then python3 -m venv .venv-evals; fi
 	. $(VENV) && pip install -e ".[dev]" -q
+	mkdir -p logs/ evals/baselines/
 
 ## ── Ground truth (run after significant design changes) ────────────────────
 
