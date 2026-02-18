@@ -15,6 +15,7 @@ Key constraint (ADR-007): pass the FULL document to the judge — never truncate
 Findings may reference any part of the document.
 """
 import asyncio
+import re
 from inspect_ai.model import get_model, ChatMessageSystem, ChatMessageUser, GenerateConfig
 from inspect_ai.scorer import Score, scorer, mean
 
@@ -51,11 +52,41 @@ Source document (evaluate the finding against this document only):
 
 Is this finding GENUINE or NOT_GENUINE?"""
 
+# G-Eval variant: reasoning-first prompting (chain-of-thought before verdict).
+# Forces the model to locate evidence in the document and apply each false-positive
+# criterion explicitly before committing to a verdict.
+_GEVAL_JUDGE_SYSTEM = """\
+You are evaluating whether an AI design reviewer's finding is genuine.
+Work through the evaluation steps before giving your verdict."""
+
+_GEVAL_JUDGE_TEMPLATE = """\
+Finding to evaluate:
+  Title: {title}
+  Issue: {issue}
+  Severity: {severity}
+
+Source document (evaluate the finding against this document only):
+{doc_content}
+
+Work through these evaluation steps:
+
+Step 1 — Evidence: Find and quote the specific text in the document that this finding references. If relevant text cannot be found, state that explicitly.
+
+Step 2 — Flaw type: Is this identifying a design gap or flaw, or is it an implementation detail, style preference, or operational choice with no design impact?
+
+Step 3 — Constraint check: Does this finding reference any constraints, requirements, or assumptions NOT present in the document? If so, it is a hallucinated constraint.
+
+Step 4 — Context independence: Can this finding be evaluated from this document alone, or does it require external knowledge (project history, prior sessions, other documents)?
+
+Based on your analysis above, state your verdict on its own line as exactly one of:
+Verdict: GENUINE
+Verdict: NOT_GENUINE"""
+
 
 async def _reverse_judge_one(
     judge_model, finding: dict, doc_content: str
 ) -> tuple[bool, str]:
-    """Ask LLM judge if an actual reviewer finding is genuine.
+    """Ask LLM judge if an actual reviewer finding is genuine (direct prompt).
 
     Passes the full document — no truncation. Findings may reference any section.
 
@@ -78,8 +109,48 @@ async def _reverse_judge_one(
     return is_genuine, reasoning
 
 
+async def _geval_judge_one(
+    judge_model, finding: dict, doc_content: str
+) -> tuple[bool, str]:
+    """Ask LLM judge if a finding is genuine using G-Eval reasoning-first prompting.
+
+    Forces chain-of-thought: the model locates evidence, classifies flaw type,
+    checks for hallucinated constraints, and verifies context independence — before
+    committing to a verdict. Verdict is parsed from the last 'Verdict:' line.
+
+    Returns:
+        (is_genuine, reasoning) — whether judge says GENUINE and the full reasoning.
+    """
+    prompt = _GEVAL_JUDGE_TEMPLATE.format(
+        title=finding.get("title", ""),
+        issue=finding.get("issue", finding.get("description", "")),
+        severity=finding.get("severity", ""),
+        doc_content=doc_content,
+    )
+    output = await judge_model.generate(
+        [ChatMessageSystem(content=_GEVAL_JUDGE_SYSTEM), ChatMessageUser(content=prompt)],
+        config=GenerateConfig(max_tokens=1000, temperature=0.0),
+    )
+    reasoning = output.completion.strip()
+
+    # Parse verdict from last "Verdict: GENUINE/NOT_GENUINE" occurrence.
+    # Strip markdown formatting (**, ##, *, -) before matching — models often
+    # format the verdict line as "**Verdict: GENUINE**" or "## Verdict: NOT_GENUINE".
+    matches = list(re.finditer(r"verdict:\s*(not_genuine|genuine)", reasoning, re.IGNORECASE))
+    if matches:
+        verdict_str = matches[-1].group(1).upper()
+        is_genuine = verdict_str == "GENUINE"
+    else:
+        is_genuine = False  # no verdict found → default NOT_GENUINE
+
+    return is_genuine, reasoning
+
+
 @scorer(metrics=[mean()])
-def reverse_judge_precision(judge: str = "anthropic/claude-haiku-4-5-20251001"):
+def reverse_judge_precision(
+    judge: str = "anthropic/claude-haiku-4-5-20251001",
+    prompt_style: str = "direct",
+):
     """
     Score reviewer precision by asking a judge LLM per actual finding.
 
@@ -92,7 +163,11 @@ def reverse_judge_precision(judge: str = "anthropic/claude-haiku-4-5-20251001"):
 
     Args:
         judge: Model to use for judging. Defaults to Haiku (cheap, fast).
+        prompt_style: "direct" (verdict-first, max_tokens=150) or
+                      "geval" (reasoning-first chain-of-thought, max_tokens=500).
     """
+    judge_fn = _geval_judge_one if prompt_style == "geval" else _reverse_judge_one
+
     async def score(state, target):
         actual_text = state.output.completion
         doc_content = state.metadata["doc_content"]
@@ -109,7 +184,7 @@ def reverse_judge_precision(judge: str = "anthropic/claude-haiku-4-5-20251001"):
         judge_model = get_model(judge)
 
         tasks = [
-            _reverse_judge_one(judge_model, finding, doc_content)
+            judge_fn(judge_model, finding, doc_content)
             for finding in actual_findings
         ]
         results = await asyncio.gather(*tasks)
