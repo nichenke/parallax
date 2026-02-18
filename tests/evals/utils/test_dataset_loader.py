@@ -272,6 +272,82 @@ def test_load_validated_findings_local_snapshot_resolution(tmp_path):
     assert "Snapshot content here" in dataset[0].input
 
 
+def test_load_validated_findings_injects_doc_content_into_metadata(tmp_path):
+    """doc_content must be present in metadata so reverse_judge_precision scorer can access it."""
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Test requirements doc\n\nSome requirements here.")
+    finding = {
+        "type": "finding", "id": "test-001", "title": "T",
+        "severity": "Critical", "validation_status": "real_flaw",
+    }
+    metadata = {
+        "source_review": "test", "design_doc_path": str(doc),
+        "review_date": "2026-02-17", "validation_date": "2026-02-17",
+        "validator": "nic", "total_findings": 1,
+        "severity_distribution": {"Critical": 1, "Important": 0, "Minor": 0},
+        "false_positive_rate": 0.0, "skill_version": "v1"
+    }
+    (tmp_path / "critical_findings.jsonl").write_text(json.dumps(finding) + "\n")
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata))
+
+    dataset = load_validated_findings(str(tmp_path))
+    sample = dataset[0]
+    assert "doc_content" in sample.metadata
+    assert "# Test requirements doc" in sample.metadata["doc_content"]
+    assert "Some requirements here" in sample.metadata["doc_content"]
+
+
+def test_load_validated_findings_must_find_none_when_file_absent(tmp_path):
+    """must_find_findings is None when must_find.jsonl does not exist (graceful skip)."""
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Doc")
+    finding = {
+        "type": "finding", "id": "test-001", "title": "T",
+        "severity": "Critical", "validation_status": "real_flaw",
+    }
+    metadata = {
+        "source_review": "test", "design_doc_path": str(doc),
+        "review_date": "2026-02-17", "validation_date": "2026-02-17",
+        "validator": "nic", "total_findings": 1,
+        "severity_distribution": {"Critical": 1, "Important": 0, "Minor": 0},
+        "false_positive_rate": 0.0, "skill_version": "v1"
+    }
+    (tmp_path / "critical_findings.jsonl").write_text(json.dumps(finding) + "\n")
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata))
+
+    dataset = load_validated_findings(str(tmp_path))
+    assert "must_find_findings" in dataset[0].metadata
+    assert dataset[0].metadata["must_find_findings"] is None
+
+
+def test_load_validated_findings_must_find_loaded_when_file_present(tmp_path):
+    """must_find_findings is populated from must_find.jsonl when the file exists."""
+    doc = tmp_path / "doc.md"
+    doc.write_text("# Doc")
+    finding = {
+        "type": "finding", "id": "test-001", "title": "T",
+        "severity": "Critical", "validation_status": "real_flaw",
+    }
+    must_find = {"id": "mf-001", "title": "Required finding", "min_recall": 0.8}
+    metadata = {
+        "source_review": "test", "design_doc_path": str(doc),
+        "review_date": "2026-02-17", "validation_date": "2026-02-17",
+        "validator": "nic", "total_findings": 1,
+        "severity_distribution": {"Critical": 1, "Important": 0, "Minor": 0},
+        "false_positive_rate": 0.0, "skill_version": "v1"
+    }
+    (tmp_path / "critical_findings.jsonl").write_text(json.dumps(finding) + "\n")
+    (tmp_path / "metadata.json").write_text(json.dumps(metadata))
+    (tmp_path / "must_find.jsonl").write_text(json.dumps(must_find) + "\n")
+
+    dataset = load_validated_findings(str(tmp_path))
+    mf = dataset[0].metadata["must_find_findings"]
+    assert mf is not None
+    assert len(mf) == 1
+    assert mf[0]["id"] == "mf-001"
+    assert mf[0]["min_recall"] == 0.8
+
+
 def test_load_validated_findings_repo_relative_path_still_works(tmp_path):
     """design_doc_path containing '/' still resolves relative to repo root (legacy behavior)."""
     # Write a doc somewhere under tmp_path that simulates a repo path

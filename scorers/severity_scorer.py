@@ -1,3 +1,5 @@
+# DEPRECATED: replaced by reverse_judge_precision() + must_find_recall() (ADR-007 / Issue #71).
+# Kept for reference. Do not use in reviewer_eval.py.
 from difflib import SequenceMatcher
 from inspect_ai.scorer import Score, scorer, accuracy
 

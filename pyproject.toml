@@ -18,3 +18,6 @@ include = ["evals*", "scorers*", "tools*"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+markers = [
+    "integration: live judge tests requiring ANTHROPIC_API_KEY (run with -m integration)",
+]
