@@ -25,14 +25,17 @@ from evals.utils.output_parser import parse_review_output
 _JUDGE_SYSTEM = """\
 You are evaluating whether an AI design reviewer's finding is genuine.
 
-A finding is GENUINE if:
-- It identifies a real problem visible in the provided document
-- The problem is a design flaw, not a matter of style or implementation preference
-- The claim is supported by or reasonably inferable from the document content
+A finding is GENUINE if it identifies a real design gap or flaw visible in the provided document.
+
+GENUINE includes:
+- Undefined or vague terms in acceptance criteria — undefined terms are design gaps regardless of whether the vagueness is intentional
+- Requirements that specify reporting a problem but not what action follows — reporting is not enforcement; missing enforcement is a genuine gap
+- Findings that challenge whether a document's stated assumption is well-founded — questioning assumptions is legitimate design review, not a hallucinated constraint
+- Real ambiguities that competent implementers would reasonably interpret differently
 
 A finding is NOT_GENUINE if it falls into any of these false positive categories:
 - Implementation detail: a coding or operational choice, not a design flaw
-- Hallucinated constraint: references requirements or assumptions not present in the document
+- Hallucinated constraint: references requirements or assumptions not present in the document — verify carefully against the full document before claiming something is absent
 - Style preference: subjective formatting, naming, or structural preference with no design impact
 - Hypothetical future concern: speculates about future requirements not relevant to the current design
 - Duplicate: substantively the same flaw already identified in another finding
