@@ -81,7 +81,7 @@ Produce JSONL findings using this structure:
 - **0**: Not confident — does not stand up to light scrutiny
 - **25**: Somewhat confident — might be real, could not fully verify from document alone
 - **50**: Moderately confident — verified present, but minor or low-frequency in practice
-- **75**: Highly confident — double-checked, directly supported by document evidence, will impact design validity
+- **75**: Highly confident — the gap or unstated constraint is clearly relevant to the document's stated scope and purpose; the document creates a context in which this limit would be expected to be addressed
 - **100**: Certain — confirmed, will definitely cause problems if not addressed
 
 **Blind spot check:**
