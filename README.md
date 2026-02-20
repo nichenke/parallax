@@ -1,57 +1,71 @@
 # Parallax
 
-**Design looks different depending on where you stand. Parallax makes you look from everywhere.**
+**Design looks different depending on where you stand.**
 
-An adversarial multi-perspective design review framework for Claude Code and Codex.
+Adversarial multi-perspective design review for AI-assisted development. You write a design doc, Parallax throws specialized review agents at it—an assumption hunter, an edge case prober, a feasibility skeptic—and consolidates their findings into something you can act on before you've written a line of implementation code.
 
----
+The name: parallax is the shift in apparent position when you observe from a different vantage point. One-angle review is parallax error. More observation points, more accurate picture. That's the whole thesis.
 
-It's Thursday afternoon. Instead of pushing your design straight to implementation, you run the tool. Seven minutes later, you're staring at a report that makes your stomach drop — in the best possible way. The Assumption Hunter found three places where you assumed exactly-once delivery but your message broker guarantees at-least-once. The Edge Case Prober identified a race condition in your cache invalidation only visible under concurrent writes from two regions. The Feasibility Skeptic noted that your "simple migration" requires a table lock on a 400M-row table during a zero-downtime deploy. Six Critical findings. You would have discovered every one of them in production, three weeks from now, under pressure, with customers waiting.
+## What it does
 
-You address the six findings, re-run, watch the count drop to zero. When Monday comes, you're not hoping the design holds — you know it holds. The ambush already happened, and you won.
+Run a design doc through multiple review agents, each tuned to a different failure mode. Get back consolidated findings ranked by severity. Fix the critical ones, re-run, watch the count drop. The ambush happens here—not three weeks later in production with customers waiting.
 
----
-
-## The Problem
-
-AI coding assistants are good at building what you ask for. They're bad at telling you what's wrong with what you asked for.
-
-The real failure mode isn't implementation bugs — it's design flaws that survive review because review happened from one angle. Your design looks solid from where you're standing. But you're only standing in one place. The assumption you don't know you're making, the edge case outside your experience, the prior art from a domain you've never touched — these don't surface from a single perspective, no matter how senior the reviewer.
-
-One-perspective design review is parallax error. The fix is more observation points.
-
-## Why "Parallax"
-
-Parallax is the apparent shift in an object's position when observed from different vantage points. The difference between views is what reveals the truth.
-
-**Parallax error** is what happens when you only look from one angle — the core problem this solves. **Baseline** is the distance between observation points; longer baseline means more accurate depth perception, and more diverse reviewers means better coverage. **Triangulation** is what parallax enables: three sightlines converge on one fix, three review agents converge on one consolidated finding.
-
-## Components
+Today this is a pipeline of Claude Code skills:
 
 ```
-parallax:survey       research and brainstorming
-parallax:calibrate    requirement refinement (MoSCoW, anti-goals, success criteria)
-parallax:review       adversarial multi-agent review with finding consolidation
-parallax:orchestrate  full pipeline: idea → execution-ready plan
-parallax:eval         skill testing and evaluation framework
+parallax:survey       — research and brainstorming
+parallax:calibrate    — requirement refinement (MoSCoW, anti-goals)
+parallax:review       — adversarial multi-agent review
+parallax:orchestrate  — full pipeline: idea → execution-ready plan
+parallax:eval         — skill testing and evaluation framework
 ```
 
-## Project Tracks
+## Current state
 
-Each track is an independent investigation area, tracked as GitHub Issues:
+This is an R&D repo. Some pieces work, some don't yet, nothing is pip-installable.
 
-| Track | Description |
-|-------|-------------|
-| **Orchestrator Skill** | Core pipeline: brainstorm → design → review → plan → execute |
-| **Eval Framework** | Skill testing with Inspect AI: unit, integration, regression, ablation |
-| **Agent Teams** | Multi-agent review configurations — effectiveness vs. cost tradeoffs |
-| **Landscape Analysis** | Competing tools, frameworks, state-of-the-art monitoring |
-| **Autonomous R&D** | Claude-native background automation for skill development |
-| **Test Cases** | Black-box validation against real design sessions with ground truth |
+**Working:** Eval framework on [Inspect AI](https://inspect.ai-safety-institute.org.uk/)—reviewer precision/recall measurement, severity calibration, confidence self-scoring. The eval loop runs, produces real metrics, and has caught real prompt regressions.
 
-## Status
+**In progress:** Review agent prompt tuning driven by eval results. Finding consolidation across agents. Orchestrator pipeline connecting skill phases end-to-end.
 
-Requirements complete. Early design and eval framework implementation underway. The `parallax:requirements` skill is validated and working. Eval integration with [Inspect AI](https://inspect.ai-safety-institute.org.uk/) is in progress.
+**Not started:** Multi-model review teams (Claude + GPT + Gemini on the same artifact), autonomous agent R&D, self-improvement loops.
+
+Track details in [GitHub Issues](../../issues).
+
+## Architecture
+
+The core bet: a pipeline of independent skills, not a monolithic agent. Each namespace segment (`survey`, `calibrate`, `review`) is useful standalone. The orchestrator composes them but doesn't own them.
+
+Evaluation uses Inspect AI with ground-truth datasets built from real design sessions. The eval framework measures whether review agents find known flaws (recall) without hallucinating findings that aren't there (precision).
+
+Key frameworks: **Inspect AI** for evals, **LangGraph** for pipeline orchestration, **Claude Code Swarms** for multi-agent review.
+
+## Setup
+
+```bash
+git clone git@github.com:nichenke/parallax.git
+cd parallax
+git config core.hooksPath hooks    # branch protection hook
+make install                        # venv + dev deps + directories
+```
+
+### Running evals
+
+```bash
+make eval              # severity calibration
+make reviewer-eval     # reviewer precision/recall
+make ablation          # prompt ablation studies
+```
+
+## Contributing
+
+Feature branches only—the pre-commit hook enforces this. Use worktrees for isolation:
+
+```bash
+git worktree add .worktrees/<name> -b feature/<name>
+cd .worktrees/<name>
+make install
+```
 
 ## License
 
