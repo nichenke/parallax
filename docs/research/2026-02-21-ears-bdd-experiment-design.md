@@ -102,14 +102,26 @@ This is N=1. It produces directional signal, not statistical proof. Label result
 
 ## EARS/BDD Hybrid Format: Scaffolding
 
+### Prior art incorporated
+
+Research into cc-sdd (Kiro-inspired SDD tools) and production EARS specs (Vibe Kanban) surfaced three patterns missing from the initial template:
+
+1. **Unwanted behavior requirements (EARS pattern #4)** — `SHALL NOT` specifications are a distinct EARS pattern, not just a negated constraint. They give review agents explicit boundaries to probe and are particularly useful for Assumption Hunter and Edge Case Prober.
+2. **Quantified constraints** — Production EARS specs enforce concrete numbers on every performance/scale/latency constraint (P95 latencies, throughput targets, batch sizes). "Fast" is not a requirement; "P95 < 500ms" is.
+3. **Error scenarios as first-class requirements** — Failure modes and error handling specified alongside happy-path behavior, not deferred to implementation.
+
+These are incorporated into the template and writing rules below.
+
 ### When to use which format
 
 | What you're specifying | Format | Why |
 |---|---|---|
 | Deterministic behavior (hooks, CLI tools, linters, API contracts) | Pure EARS | Trigger → response is guaranteed; testable with assertions |
+| Forbidden behavior (security boundaries, invariants) | EARS SHALL NOT | Explicit negative specification; gives reviewers boundaries to probe |
 | LLM skill behavior (agent responses, review output, synthesis) | BDD Given/When/Then | Observable outcomes; acceptance-testable but not deterministic |
 | Design intent and motivation | JTBD statement | Captures *why* before *what*; prevents solving the wrong problem |
 | Hard constraints vs. guidance | RFC 2119 SHALL/SHOULD/MAY | Distinguishes non-negotiable from preferred from optional |
+| Error and failure behavior | EARS WHEN [failure] or BDD GIVEN [error state] | Failure modes as requirements, not afterthoughts |
 
 ### The category error to avoid
 
@@ -161,6 +173,24 @@ AND [additional observable outcome, optional]
 - SHOULD: [Expected — deviation requires justification]
 - MAY: [Optional — nice to have, defer if costly]
 
+**Boundaries (what this component SHALL NOT do):**
+[Use for security invariants, forbidden behaviors, scope fences]
+
+WHEN [trigger condition]
+THE [component] SHALL NOT [forbidden behavior]
+
+**Error handling:**
+[How does this requirement behave when things go wrong?]
+
+WHEN [failure condition — e.g., upstream timeout, invalid input, missing dependency]
+THE [component] SHALL [error behavior — e.g., return error code, retry with backoff, log and skip]
+
+**BDD error scenario:**
+GIVEN [error precondition — e.g., upstream service unavailable]
+WHEN [the action is attempted]
+THEN [observable error outcome — e.g., user sees error message within 2s]
+AND [system state after error — e.g., no partial writes, queue entry preserved]
+
 ### REQ-002 — [Next requirement]
 [Same structure. One requirement per section. Number sequentially.]
 
@@ -170,9 +200,13 @@ AND [additional observable outcome, optional]
 
 ### NFR-001 — [Title]
 
-- SHALL: [Hard constraint — e.g., "respond within 500ms"]
-- SHOULD: [Target — e.g., "log latency at INFO level"]
-- MAY: [Aspiration — e.g., "support batch mode"]
+- SHALL: [Hard constraint with concrete number — e.g., "P95 response time < 500ms"]
+- SHOULD: [Target with concrete number — e.g., "log latency at INFO when > 200ms"]
+- MAY: [Aspiration — e.g., "support batch mode for > 100 items"]
+
+**Quantification rule:** Every performance, latency, throughput, or scale
+constraint MUST include a concrete number. "Fast" is not a requirement.
+"P95 < 500ms under 100 concurrent requests" is.
 
 ---
 
@@ -181,9 +215,16 @@ AND [additional observable outcome, optional]
 [BDD scenarios that validate the feature works end-to-end.
 These are integration-level, not per-requirement.]
 
+**Happy path:**
 GIVEN [system state]
 WHEN [user action or trigger sequence]
 THEN [end-to-end observable outcome]
+
+**Error path:**
+GIVEN [system state with failure condition]
+WHEN [user action or trigger sequence]
+THEN [graceful degradation outcome]
+AND [no data loss / corruption]
 
 ---
 
@@ -214,6 +255,9 @@ what the question is, what the options are, what's blocking resolution.]
 12. Every functional requirement needs a constraints block
 13. Non-functional requirements use SHALL/SHOULD/MAY only (no EARS/BDD — these are properties, not behaviors)
 14. Open questions section is mandatory even if empty — forces explicit acknowledgment of unknowns
+15. Every requirement with a happy-path behavior SHOULD have an error-handling block — what happens when the trigger fails, the dependency is unavailable, or the input is invalid?
+16. Every NFR constraint involving performance, latency, throughput, or scale MUST include a concrete number. No vague qualifiers ("fast", "scalable", "responsive")
+17. Use SHALL NOT for security boundaries, invariants, and scope fences. These are distinct from constraints — they're explicit negative specifications that give reviewers boundaries to probe
 
 ### Anti-patterns
 
@@ -227,6 +271,10 @@ what the question is, what the options are, what's blocking resolution.]
 | No anti-goals | Feature scope is implied but not stated | Write explicit anti-goals — what you won't do |
 | SHALL/SHOULD confusion | "The system SHOULD authenticate users" | If auth is required, it's SHALL. SHOULD means degraded-but-functional without it |
 | Missing open questions | No open questions section | Always include — even "None identified" forces the acknowledgment |
+| Vague NFR | "The system SHALL be fast" | Quantify: "P95 response time SHALL be < 500ms under 100 concurrent requests" |
+| Happy-path only | REQ-001 specifies success, no error handling | Add error block: WHEN [failure] THE [component] SHALL [error behavior] |
+| Missing SHALL NOT | Security boundary implied but not stated | Explicit: "THE component SHALL NOT expose credentials in logs" |
+| Negative as constraint | Constraints: "SHALL: must not leak data" | Use SHALL NOT block — it's a distinct requirement type, not a constraint modifier |
 
 ---
 
