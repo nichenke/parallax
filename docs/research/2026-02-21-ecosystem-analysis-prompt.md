@@ -138,8 +138,14 @@ For each major parallax component, classify as:
 - **REPLACEABLE** — solved better by OpenSpec, Spec Kit, or EARS/BDD
 - **AUGMENTABLE** — keep but integrate with ecosystem tooling
 
-Pay special attention to the requirements-stage agents: are they redundant with
-OpenSpec's specify phase, or are they complementary as EARS/BDD validators?
+Pay special attention to the requirements-stage agents (Problem Framer, Scope
+Guardian, Constraint Finder, Success Validator, Assumption Hunter). They have
+9-27% precision on unstructured documents and have never been tested on
+EARS/BDD-structured input. Evaluate their value based on demonstrated
+effectiveness, not on the investment made in building them. Watch for sunk-cost
+reasoning — "preserves the tuning investment" is not a valid justification.
+The question is: would a purpose-built EARS linter be simpler and more effective
+than repurposing these agents?
 
 ### 2. Strategy Comparison
 Evaluate Strategy A vs Strategy B on:
@@ -181,3 +187,6 @@ Layer 1 construction.
 - The core research question is still "does multi-agent adversarial review produce
   genuinely useful findings?" — don't lose that thread in architecture astronautics.
 - If you'd recommend deferring ALL migration, say so and explain why.
+- Watch for sunk-cost reasoning in your own analysis. "We built X, so let's find
+  a use for X" is not the same as "X solves problem Y." Evaluate each component
+  on demonstrated value, not development investment.
