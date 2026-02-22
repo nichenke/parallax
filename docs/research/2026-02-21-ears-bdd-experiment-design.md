@@ -18,34 +18,85 @@ Structuring requirements in EARS/BDD hybrid format produces higher-precision fin
 
 ## Experiment Design
 
+### What we're actually testing
+
+The interesting question isn't "does document format help agents?" — it's "does a review-and-refine pass on requirements improve the whole downstream pipeline?" The experiment should test the *process*, not just the *format*.
+
+### Three-arm comparison
+
+```
+Arm A (baseline):
+  Naive requirements → OpenSpec pipeline → build
+
+Arm B (refined):
+  Same naive requirements → EARS/BDD review + refinement → OpenSpec pipeline → build
+
+Compare at every stage:
+  1. What did the review/refinement step catch? (Arm B only)
+  2. Did the OpenSpec output differ between arms?
+  3. Did parallax reviewer findings differ in quality?
+  4. Did downstream build quality differ?
+```
+
 ### Variables
 
-- **Independent variable:** Requirements document format (unstructured vs. EARS/BDD hybrid)
-- **Dependent variables:** Finding precision (reverse judge), finding actionability (qualitative), finding distribution (severity, phase, false positive rate)
-- **Controlled:** Same feature scope, same agents, same reviewer temperature, same judge configuration
+- **Independent variable:** Whether requirements go through EARS/BDD review/refinement before entering OpenSpec
+- **Dependent variables:** Requirements gaps surfaced during refinement, OpenSpec artifact quality, parallax reviewer finding precision, downstream build quality
+- **Controlled:** Same feature, same agents, same reviewer temperature, same judge configuration, same OpenSpec schema
 
 ### Method
 
-1. Select a real feature you're planning to build (not a synthetic example)
-2. Write the requirements document twice:
-   - **Version A:** Unstructured markdown — the way you'd naturally describe it in a CLAUDE.md or design doc
-   - **Version B:** EARS/BDD hybrid format following the scaffolding below
-3. Both documents must cover the same scope, constraints, and acceptance criteria — the information content should be equivalent, only the structure differs
-4. Run all 6 design-stage agents against Version A, collect JSONL findings
-5. Run all 6 design-stage agents against Version B, collect JSONL findings
-6. Run reverse judge on both finding sets
-7. Compare precision, severity distribution, and qualitative actionability
+1. Select a real feature you're planning to build (not synthetic)
+2. Write naive requirements the way you naturally would — prose, bullet lists, whatever you'd put in a design doc. This is the starting point for both arms.
+3. **Arm A:** Feed naive requirements directly into OpenSpec (`/openspec:proposal` → `/openspec:ff`). Run parallax design-stage agents against the generated design. Collect findings.
+4. **Arm B:** Take the same naive requirements. Structure them using the EARS/BDD template below. Note every gap, ambiguity, and missing constraint the structuring process surfaces. Then feed the refined EARS/BDD requirements into OpenSpec. Run parallax design-stage agents against the generated design. Collect findings.
+5. Run reverse judge on both finding sets.
+6. Compare at each stage.
+
+### What to measure at each stage
+
+**Stage 1: Requirements refinement (Arm B only)**
+
+This stage produces its own value signal independent of the agents:
+- How many gaps did the EARS/BDD structuring process surface?
+- Were these gaps real (would they have caused problems downstream)?
+- How much new information was forced by the template (JTBD, anti-goals, open questions)?
+- How long did refinement take? (effort cost of the process)
+
+**Stage 2: OpenSpec artifact comparison**
+
+- Are the OpenSpec-generated specs materially different between arms?
+- Does the Arm B spec have more specific acceptance criteria?
+- Does the Arm B spec have fewer ambiguous sections?
+
+**Stage 3: Reviewer finding comparison**
+
+| Metric | Arm A | Arm B |
+|---|---|---|
+| Total findings | | |
+| Genuine findings (reverse judge) | | |
+| Precision (genuine / total) | | |
+| Severity distribution | | |
+| Findings referencing specific requirement IDs | N/A | |
+| "Vague concern" findings (no specific remediation) | | |
+
+**Stage 4: Downstream build (qualitative)**
+
+- Did the Arm B build encounter fewer surprises?
+- Were there requirements misunderstandings that Arm A hit but Arm B avoided?
+- Did the build diverge from spec, and if so, where?
 
 ### What "success" looks like
 
-- **Clear signal:** EARS/BDD findings have measurably higher precision (>10 percentage points) and/or fewer false positives in the same severity class
-- **Marginal signal:** Precision is comparable but findings reference specific requirements by ID, making them more actionable for the author
-- **No signal:** Precision is comparable and findings are qualitatively similar
-- **Negative signal:** EARS/BDD structure causes agents to generate more false positives (e.g., flagging EARS syntax issues instead of real gaps)
+- **Clear signal:** The EARS/BDD refinement pass surfaces real gaps (Stage 1), OpenSpec artifacts are measurably more specific (Stage 2), AND reviewer precision improves (Stage 3). All three stages show improvement.
+- **Process value, not agent value:** Refinement surfaces real gaps (Stage 1) and OpenSpec output improves (Stage 2), but reviewer precision is comparable (Stage 3). This means the format helps humans and OpenSpec, but not the review agents — still valuable, different investment case.
+- **Agent value only:** Reviewer precision improves (Stage 3) but the refinement process didn't surface much (Stage 1). The format helps agents parse better, but the human effort of structuring isn't justified — consider a lighter-weight formatting pass instead.
+- **No signal:** Comparable across all stages. The refinement process is overhead without measurable benefit.
+- **Negative signal:** EARS/BDD structure causes agents to generate more false positives or OpenSpec produces worse output from over-specified input.
 
 ### Limitations
 
-This is N=1 per format. It produces directional signal, not statistical proof. Label results as "exploratory." If directionally positive, design a larger experiment (N>=10 per format) before committing to tooling investment.
+This is N=1. It produces directional signal, not statistical proof. Label results as "exploratory." The three-arm design partially compensates by producing signal at multiple stages — even if agent precision is inconclusive at N=1, the requirements refinement stage produces qualitative data that's useful regardless of sample size.
 
 ---
 
@@ -194,62 +245,98 @@ Good candidates: a Claude Code skill, a CLI hook, an MCP tool integration — an
 
 ## Execution Steps
 
-### Step 1: Select project, write Version A (unstructured)
+### Step 1: Select project, write naive requirements
 
-Write the requirements the way you naturally would — prose, bullet lists, whatever structure you'd put in a CLAUDE.md or design doc. Don't artificially make it worse; write it the way you'd actually write it.
+Pick a real feature. Write requirements the way you naturally would — prose, bullet lists, whatever you'd put in a CLAUDE.md or design doc. Don't artificially make it worse; write it the way you'd actually write it.
 
-Save as `docs/experiments/ears-bdd/version-a-unstructured.md`.
+Save as `docs/experiments/ears-bdd/naive-requirements.md`.
 
-### Step 2: Write Version B (EARS/BDD hybrid)
+### Step 2: Arm A — Naive requirements → OpenSpec
 
-Using the template and rules above, restructure the same requirements into EARS/BDD format. The information content should be equivalent — same scope, same constraints, same acceptance criteria. The structure is the only variable.
+Feed the naive requirements directly into OpenSpec:
+```
+/openspec:proposal [paste naive requirements]
+/openspec:ff
+```
 
-This step will surface gaps: the template forces JTBD, anti-goals, and open questions that the unstructured version may not have. **That's signal, not contamination.** Note which information is *new* (forced by the template) vs. *restructured* (present in Version A but differently organized). If the template forces you to add significant new content, that itself is a finding about the format's value.
+Save the generated OpenSpec design artifact as `docs/experiments/ears-bdd/arm-a-openspec-design.md`.
 
-Save as `docs/experiments/ears-bdd/version-b-structured.md`.
+### Step 3: Arm A — Run design-stage agents
 
-### Step 3: Run design-stage agents against Version A
+Run all 6 design-stage agents (Assumption Hunter, Edge Case Prober, Requirement Auditor, Feasibility Skeptic, First Principles Challenger, Prior Art Scout) against the Arm A OpenSpec design.
 
-Run all 6 design-stage agents (Assumption Hunter, Edge Case Prober, Requirement Auditor, Feasibility Skeptic, First Principles Challenger, Prior Art Scout) against Version A. Collect JSONL output.
+Save findings as `docs/experiments/ears-bdd/arm-a-findings.jsonl`.
 
-Save findings as `docs/experiments/ears-bdd/findings-version-a.jsonl`.
+### Step 4: Arm B — EARS/BDD refinement pass
 
-### Step 4: Run design-stage agents against Version B
+Take the same naive requirements. Structure them using the EARS/BDD template above.
 
-Same agents, same configuration, against Version B.
+**Track the refinement delta:**
+- List every gap, ambiguity, and missing constraint the structuring process surfaces
+- Note which information is *new* (forced by the template) vs. *restructured* (already present)
+- Record the effort involved (rough time, number of iterations)
 
-Save findings as `docs/experiments/ears-bdd/findings-version-b.jsonl`.
+Save as:
+- `docs/experiments/ears-bdd/arm-b-refined-requirements.md` (the EARS/BDD document)
+- `docs/experiments/ears-bdd/arm-b-refinement-delta.md` (what the process surfaced)
 
-### Step 5: Run reverse judge on both finding sets
+### Step 5: Arm B — Refined requirements → OpenSpec
 
-Use the existing eval framework's reverse judge (Haiku, T=0.0) to score each finding as GENUINE or NOT_GENUINE against its respective source document.
+Feed the EARS/BDD-structured requirements into OpenSpec:
+```
+/openspec:proposal [paste refined requirements]
+/openspec:ff
+```
 
-### Step 6: Compare and document
+Save as `docs/experiments/ears-bdd/arm-b-openspec-design.md`.
 
-| Metric | Version A | Version B |
+### Step 6: Arm B — Run design-stage agents
+
+Same agents, same configuration, against the Arm B OpenSpec design.
+
+Save findings as `docs/experiments/ears-bdd/arm-b-findings.jsonl`.
+
+### Step 7: Run reverse judge on both finding sets
+
+Use the existing eval framework's reverse judge (Haiku, T=0.0) to score each finding as GENUINE or NOT_GENUINE against its respective OpenSpec design document.
+
+### Step 8: Compare at every stage
+
+**Stage 1 — Refinement value (Arm B only):**
+- Gaps surfaced by EARS/BDD structuring: [count and list]
+- Were these real gaps or template noise?
+- New information forced by template: [list]
+
+**Stage 2 — OpenSpec artifact diff:**
+- `diff arm-a-openspec-design.md arm-b-openspec-design.md`
+- Material differences: [list]
+- More specific acceptance criteria in Arm B? [yes/no + examples]
+
+**Stage 3 — Reviewer findings:**
+
+| Metric | Arm A | Arm B |
 |---|---|---|
 | Total findings | | |
 | Genuine findings | | |
-| Not genuine findings | | |
 | Precision (genuine / total) | | |
-| Severity distribution (Critical / Important / Minor) | | |
-| Phase distribution (survey / calibrate / design / plan) | | |
-| New information surfaced by template (Version B only) | N/A | |
+| Severity distribution (Crit / Imp / Min) | | |
+| Findings referencing requirement IDs | N/A | |
+| Vague concern findings | | |
 
-Qualitative comparison:
-- Are Version B findings more specific (reference requirement IDs)?
-- Are Version B findings more actionable (clearer remediation)?
-- Does Version B produce fewer "vague concern" findings?
-- Did the template itself surface gaps before the agents ran?
+**Stage 4 — Qualitative (if you proceed to build):**
+- Requirements misunderstandings hit during build
+- Scope surprises
+- Spec-to-build divergence
 
-### Step 7: Decision
+### Step 9: Decision
 
 | Result | Action |
 |---|---|
-| Clear signal (>10pp precision improvement) | Design larger experiment (N>=10). Consider EARS/BDD tooling investment. |
-| Marginal signal (comparable precision, better actionability) | The format helps humans more than it helps agents. Consider lightweight adoption without tooling. |
-| No signal | Defer EARS/BDD tooling. Focus on agent prompt improvement instead. |
-| Negative signal | EARS/BDD structure confuses agents. Investigate whether prompt adaptation fixes it before abandoning. |
+| All three stages show improvement | Design larger experiment (N>=10). Invest in EARS/BDD tooling. |
+| Process value only (Stage 1-2 improve, Stage 3 comparable) | Adopt EARS/BDD as a human practice. Skip agent-specific tooling. |
+| Agent value only (Stage 3 improves, Stage 1-2 marginal) | Investigate lighter formatting pass — maybe just section structure, not full EARS/BDD. |
+| No signal across stages | Defer EARS/BDD investment. Focus on agent prompt improvement. |
+| Negative signal | Investigate root cause before abandoning — is it the format or the OpenSpec integration? |
 
 ---
 
