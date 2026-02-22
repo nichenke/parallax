@@ -291,9 +291,11 @@ what the question is, what the options are, what's blocking resolution.]
 
 ## Execution Steps
 
-### Step 1: Restructure existing requirements into PEARS format
+### Step 1: Generate PEARS requirements from existing requirements
 
-Take the existing requirements document. Restructure into PEARS format using the template and writing rules above.
+Use the PEARS template, writing rules, and anti-patterns (packaged as a minimal skill) to guide AI-assisted restructuring of the existing requirements document into PEARS format.
+
+The skill provides the template structure, format selection rules (EARS vs. BDD vs. SHALL NOT), completeness rules, and anti-patterns. The AI applies them to the existing requirements content, surfacing gaps the structure forces.
 
 **Track the restructuring delta:**
 - List every gap, ambiguity, and missing constraint the PEARS structuring surfaces
@@ -385,4 +387,56 @@ Use the eval framework's reverse judge (Haiku, T=0.0) to score each finding as G
 
 **N=1 produces direction, not proof.** Label results as "exploratory."
 
-**The PEARS template is the minimal scaffolding.** Don't build an elicitation skill, a PEARS linter, or an OpenSpec schema customization before running this experiment. The template and writing rules above are enough to produce a properly structured document by hand.
+**PEARS documents are AI-assisted, not hand-written.** The minimum viable tooling is a skill that provides the template, writing rules, and anti-patterns to guide AI-assisted generation. The template and rules in this doc are that skill's content — package them before the experiment, not after.
+
+---
+
+## Appendix: cc-sdd Requirements Specialist — What It Would Do Differently
+
+See `2026-02-21-cc-sdd-requirements-specialist-analysis.md` for full technical analysis with exact system prompts.
+
+### What cc-sdd's Requirements Specialist is
+
+A **requirements generator** — takes a feature description and produces EARS-formatted requirements using a 4-phase pipeline: analysis → EARS template application → document structure → quality gate validation. It's a single agent, not a review team. It generates, it doesn't critique.
+
+### Two things cc-sdd's generation process encodes that PEARS currently doesn't
+
+**1. Structured analysis phase before generation**
+
+cc-sdd's Requirements Specialist walks through a systematic decomposition before writing any requirements:
+- Identify key system components
+- Determine user interactions
+- List system states and transitions
+- Consider error scenarios
+
+PEARS has the output template but doesn't prescribe this analysis sequence. A PEARS skill could add a similar pre-generation phase: "Before filling the template, enumerate components, interactions, states, and failure modes." This is lightweight — a few prompts, not a separate agent.
+
+**2. Pattern-driven completeness sweep**
+
+cc-sdd systematically generates requirements in each EARS category:
+1. Ubiquitous requirements (system fundamentals, always active)
+2. Event-driven requirements (user actions → responses)
+3. State-driven requirements (conditional on system state)
+4. Optional feature requirements (feature-conditional behavior)
+5. Unwanted behavior requirements (error handling, edge cases)
+
+PEARS lists EARS/BDD/SHALL NOT as format options but doesn't force you through each category asking "do you have requirements of this type?" A completeness prompt — "walk through each PEARS category and confirm whether it applies" — would catch omissions without adding a separate agent.
+
+### What cc-sdd's generation process does NOT do that PEARS does
+
+| Capability | cc-sdd | PEARS |
+|---|---|---|
+| Deterministic vs. probabilistic distinction | No — all EARS, all SHALL | Yes — EARS for deterministic, BDD for probabilistic |
+| JTBD / intent capture | No | Yes — mandatory overview section |
+| Anti-goals | No | Yes — mandatory |
+| Assumptions and risks | No | Yes — via template |
+| Pre-mortem / failure modes | No | Encouraged via error handling blocks |
+| SHALL NOT boundaries | Only as "unwanted behavior" pattern | Explicit distinct pattern |
+| Quantified NFRs | "Non-functional requirements specified" (checklist) | Concrete numbers mandatory (rule 16) |
+| Open questions | No | Mandatory section |
+
+### Decision: Not a separate experiment arm
+
+cc-sdd's Requirements Specialist and PEARS operate at different layers — generation vs. review. A bakeoff between them doesn't test the same thing. The useful elements from cc-sdd (analysis phase, completeness sweep) are small enough to fold into the PEARS skill as pre-generation prompts rather than testing as a separate arm.
+
+If a future experiment tests whether AI-generated vs. AI-guided-human-structured PEARS requirements produce different review quality, cc-sdd's generation approach becomes relevant. For this experiment — which tests whether the review gate adds value — the input generation method is held constant.
