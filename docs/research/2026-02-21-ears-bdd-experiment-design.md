@@ -293,9 +293,13 @@ what the question is, what the options are, what's blocking resolution.]
 
 ### Step 1: Generate PEARS requirements from existing requirements
 
-Use the PEARS template, writing rules, and anti-patterns (packaged as a minimal skill) to guide AI-assisted restructuring of the existing requirements document into PEARS format.
+Use the PEARS skill to guide AI-assisted restructuring of the existing requirements document into PEARS format. The skill includes:
 
-The skill provides the template structure, format selection rules (EARS vs. BDD vs. SHALL NOT), completeness rules, and anti-patterns. The AI applies them to the existing requirements content, surfacing gaps the structure forces.
+1. **Pre-generation analysis phase** — before filling the template, enumerate system components, user interactions, state transitions, and failure modes (adapted from cc-sdd's structured decomposition)
+2. **Template + writing rules + anti-patterns** — the format scaffolding defined in this doc
+3. **Pattern completeness sweep** — after initial generation, walk through each PEARS category (EARS deterministic, BDD probabilistic, SHALL NOT boundaries, error handling, NFRs) and confirm whether it applies; surface any skipped categories
+
+Both arms use the same skill with all three phases. The analysis phase and completeness sweep are not experimental variables — they're baseline generation quality. Testing a deliberately weakened PEARS skill against parallax review would conflate "bad generation" with "review adds value."
 
 **Track the restructuring delta:**
 - List every gap, ambiguity, and missing constraint the PEARS structuring surfaces
@@ -439,4 +443,10 @@ PEARS lists EARS/BDD/SHALL NOT as format options but doesn't force you through e
 
 cc-sdd's Requirements Specialist and PEARS operate at different layers — generation vs. review. A bakeoff between them doesn't test the same thing. The useful elements from cc-sdd (analysis phase, completeness sweep) are small enough to fold into the PEARS skill as pre-generation prompts rather than testing as a separate arm.
 
-If a future experiment tests whether AI-generated vs. AI-guided-human-structured PEARS requirements produce different review quality, cc-sdd's generation approach becomes relevant. For this experiment — which tests whether the review gate adds value — the input generation method is held constant.
+### Future hypothesis: cc-sdd generation approach addresses naive PEARS defects
+
+If the current experiment's review gate (Arm B) repeatedly catches the same class of generation gap — missing requirement categories, overlooked components, incomplete state enumeration — that's evidence the PEARS skill's generation phase needs strengthening. The cc-sdd Requirements Specialist's structured decomposition (components → interactions → states → errors) is a candidate fix.
+
+**Future experiment design:** Compare PEARS skill with basic analysis phase vs. PEARS skill with cc-sdd-style systematic decomposition. Measure: does the deeper decomposition reduce the number of genuine findings the review gate produces? If review findings drop because the generator caught those issues upstream, the decomposition paid for itself.
+
+This experiment only makes sense after the current one. If the review gate finds few genuine issues on current PEARS output, there's nothing for better generation to prevent.
