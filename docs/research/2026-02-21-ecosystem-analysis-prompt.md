@@ -1,11 +1,13 @@
-# Deep Analysis: Parallax vs. OpenSpec vs. Spec Kit
+# Deep Analysis: Parallax vs. OpenSpec vs. Spec Kit (v2 — with EARS/BDD Context)
 
 ## Context
 
 I maintain the `parallax` repo (github.com/nichenke/parallax) — a skill and eval
 framework for multi-perspective adversarial design review in AI-assisted development.
-It was started without knowledge of OpenSpec or Spec Kit. I need you to do a deep
-comparative analysis and migration strategy.
+It was started without knowledge of OpenSpec or Spec Kit. Separately, an SDD research
+report (`docs/research/sdd-research-report.md`) proposed a three-layer architecture
+using OpenSpec + EARS/BDD hybrid requirements. I need you to do a deep comparative
+analysis, evaluate two migration strategies, and critically challenge assumptions.
 
 ## What Parallax Is (Current State)
 
@@ -17,14 +19,17 @@ design flaws survive review because review happens from one perspective.
   and `requirements/SKILL.md` (5 parallel requirement validators)
 - 11 reviewer agents with distinct critical lenses (Assumption Hunter, Edge Case Prober,
   Requirement Auditor, Feasibility Skeptic, First Principles Challenger, Prior Art Scout,
-  plus 5 requirements-stage agents)
+  plus 5 requirements-stage: Problem Framer, Scope Guardian, Constraint Finder,
+  Success Validator, Assumption Hunter)
 - Eval framework on Inspect AI: two-tier scoring with reverse judge precision
   (Haiku asks "is this finding genuine?") + must-find recall (curated ground truth)
 - 2 curated datasets (19 ground truth findings) with frozen document snapshots
-- 3 completed review cycles with full finding artifacts
-- 8 ADRs documenting key architectural decisions
+- 3 completed review cycles with full finding artifacts (v1: 44, v2: 55, v3: confidence baseline)
+- 8 ADRs documenting key architectural decisions (ADR-005 through ADR-008 cover
+  eval framework choices: rejected G-Eval, Factuality, RAGAS with specific rationale)
 - JSONL finding schema with phase/severity/confidence metadata
 - Finding classification by pipeline phase (survey/calibrate/design/plan)
+- Synthesizer agent for finding consolidation (dedup, severity classification, phase routing)
 
 **What's planned but unbuilt:**
 - `parallax:orchestrate` — full pipeline controller (Issue #52, design decision pending)
@@ -40,11 +45,12 @@ design flaws survive review because review happens from one perspective.
 
 **Key design decisions:**
 - BUILD adversarial review (novel), LEVERAGE Inspect AI + Haiku judge
-- Per-reviewer eval decomposition (not full-skill orchestration)
+- Per-reviewer eval decomposition (ADR-006: test agents independently, not full skill)
 - Reverse judge for precision (solves context contamination in ground truth matching)
 - Absence-detection framing (reviewers look for what's NOT stated)
 - Git-as-audit-trail (every re-review is a diffable commit)
 - SRE-style finding format (blast radius, failure mode, mitigation)
+- Genuineness gate is binary (no partial credit — protects precision metric)
 
 ## What OpenSpec Is
 
@@ -53,16 +59,18 @@ Spec-driven development framework from Fission AI (github.com/Fission-AI/OpenSpe
 
 **Core concepts:**
 - Proposal → spec → design → tasks pipeline via slash commands
-- Living specs as first-class git artifacts in `openspec/specs/`
-- Intent-focused review (reviewers examine proposals and spec deltas, not code)
+- Living specs in `openspec/specs/`; change deltas in `openspec/changes/`
+  with `ADDED`/`MODIFIED`/`REMOVED` markers
+- Custom schemas in YAML + markdown templates in `openspec/schemas/`
+- Three-layer AI instructions: context, rules, templates (assembled dynamically)
 - Agent-agnostic (30+ platforms including Claude Code, Cursor, Copilot)
-- Brownfield-ready, lightweight, iterative
-- Persistent context across sessions via repo-stored specs
+- Brownfield-native via two-folder model
 
-**Commands:** `/openspec:new`, `/openspec:proposal`, `/openspec:ff` (fast-forward),
-`/openspec:apply`
-
-**Gap:** No adversarial review. Intent review is human-driven, not automated multi-agent.
+**Known gaps (from SDD research):**
+- Hardcoded spec parser (issue #666) — affects EARS heading customization
+- No review gate native (High severity)
+- No PM-layer elicitation (JTBD, impact mapping, MoSCoW)
+- No cross-repo spec composition
 
 ## What Spec Kit Is
 
@@ -73,51 +81,103 @@ by multiple repos (plaesy/spec-kit, specpulse/specpulse, IBM/iac-spec-kit, other
 - Constitutional governance (project principles as guardrails)
 - 8-phase workflow: constitute → specify → plan → tasks → implement → analyze →
   clarify → validate
-- Multi-artifact consistency validation (constitution ↔ spec ↔ plan ↔ code)
+- Multi-artifact consistency validation
 - Zero-ambiguity protocol with anti-hallucination mechanisms
-- File structure in `.specify/` directory
-- Platform-agnostic (8+ AI coding tools)
 
-**Gap:** Analyze phase is consistency checking, not adversarial criticism.
-Ecosystem is fragmented across 5+ implementations with no clear winner.
+**Assessment:** Experimental, brownfield-weak, fragmented across 5+ implementations.
+Not recommended as primary tool per SDD research.
+
+## The EARS/BDD Hybrid Model (from SDD Research)
+
+A key finding from separate SDD research: pure EARS (`SHALL`/`WHEN`/`IF`) is a
+category error for LLM-based skills because skill behavior is probabilistic, not
+deterministic. The hybrid model:
+
+| Layer | Format | Rationale |
+|---|---|---|
+| Hook / tool / linter requirements | Pure EARS | Deterministic, event-driven, testable |
+| Skill behavioral contracts | BDD Given/When/Then | Observable outcomes, acceptance-testable |
+| Skill design intent | JTBD + SHALL/SHOULD/MAY tiers | Captures 'why' + constraint precision |
+| Non-functional properties | RFC 2119 SHALL/SHOULD/MAY | Precision without false determinism |
+
+The SDD report proposes a three-layer architecture:
+- **Layer 1:** Requirements elicitation (custom skill) — JTBD → impact map →
+  MoSCoW/YAGNI → EARS/BDD → gap check. Output: `pre-proposal.md`
+- **Layer 2:** SDD lifecycle (OpenSpec) — proposal → specs → design → tasks →
+  archive. Review gate blocks apply.
+- **Layer 3:** Execution (Claude Code / Codex)
+
+## Two Migration Strategies to Evaluate
+
+### Strategy A: OpenSpec + Parallax Review Gate (Simple)
+
+```
+/openspec:proposal → /openspec:ff → parallax:review → /openspec:apply
+```
+
+Single injection point. Requirements-stage agents retired. Minimal build scope.
+
+### Strategy B: Three-Layer + Parallax at Two Points (Full)
+
+```
+Layer 1: EARS/BDD elicitation → parallax requirements agents validate → pre-proposal.md
+Layer 2: OpenSpec lifecycle → parallax design agents review → apply
+Layer 3: Execution
+```
+
+Two injection points. All 11 agents used. Significant build scope (5 new components).
 
 ## Your Task
 
-Read the full parallax repo deeply — every doc, every agent, every eval, every issue.
-Then produce:
+Read the full parallax repo deeply — every doc, every agent, every eval, every issue,
+and especially `docs/research/sdd-research-report.md`. Then produce:
 
 ### 1. Durability Assessment
 For each major parallax component, classify as:
-- **DURABLE** — genuinely novel, not addressed by either ecosystem
-- **REPLACEABLE** — solved better by OpenSpec or Spec Kit
+- **DURABLE** — genuinely novel, not addressed by either ecosystem or EARS/BDD model
+- **REPLACEABLE** — solved better by OpenSpec, Spec Kit, or EARS/BDD
 - **AUGMENTABLE** — keep but integrate with ecosystem tooling
 
-Justify each classification with specific evidence from all three systems.
+Pay special attention to the requirements-stage agents: are they redundant with
+OpenSpec's specify phase, or are they complementary as EARS/BDD validators?
 
-### 2. Ecosystem Recommendation
-Which ecosystem (OpenSpec or Spec Kit) should be the primary workflow, and why?
-Consider: maturity, philosophical alignment, migration effort, what Parallax loses
-vs. gains. Present tradeoffs explicitly.
+### 2. Strategy Comparison
+Evaluate Strategy A vs Strategy B on:
+- **Research value:** Which helps answer "does adversarial review work?" faster?
+- **Build scope:** What's the effort difference?
+- **Quality impact:** Does EARS/BDD-structured input measurably improve review output?
+- **Premature optimization risk:** Is Strategy B building a production system before
+  the core hypothesis is validated?
+- **Garbage-in risk:** Does Strategy A skip input quality and suffer lower precision?
 
-### 3. Migration Architecture
-Design how Parallax's durable components plug into the chosen ecosystem. Specifically:
-- Where in the ecosystem's pipeline does adversarial review inject?
-- What Parallax skills/agents/evals transfer as-is vs. need adaptation?
-- What gets deleted from parallax?
-- What new integration code is needed?
+### 3. Ecosystem Recommendation
+Which ecosystem should be primary, and when does the EARS/BDD layer justify its cost?
+Challenge the SDD report's assumption that Layer 1 is necessary — is requirements
+elicitation a distraction from review quality improvement?
 
-### 4. Risk Assessment
-What does Parallax lose by migrating? What capabilities or design properties
-of the current standalone approach don't survive integration? Are there
-architectural assumptions in the eval framework that break under a different
-orchestration model?
+### 4. Migration Architecture
+Design how parallax components plug into the chosen strategy. Show injection points,
+what transfers, what needs adaptation, what gets deleted.
 
-### 5. Concrete Next Steps
-Ordered list of migration actions with dependencies. What do I do first,
-second, third? What experiments validate the approach before full commitment?
+### 5. Risk Assessment
+What does parallax lose by migrating? What architectural assumptions break?
+Specific risks to evaluate:
+- Per-reviewer eval decomposition (ADR-006) with multi-file OpenSpec artifacts
+- EARS category error propagation (SHALL for probabilistic behavior)
+- Judge context dilution with larger OpenSpec artifacts
+- Elicitation skill quality as a new failure mode
+
+### 6. Concrete Next Steps
+Ordered list with decision gates. Include the EARS/BDD controlled experiment:
+structured vs. unstructured input documents, same reviewer agents, compare
+precision/recall. This tests the "garbage in" hypothesis before committing to
+Layer 1 construction.
 
 ## Constraints
 - Be direct. This is for a principal SWE with 25 years experience.
 - No scoring systems or letter grades. Use severity levels if needed.
 - Stress-test your own recommendations — surface counterarguments.
-- If you'd recommend NOT migrating, say so and explain why.
+- Challenge the SDD report's conclusions where evidence is thin.
+- The core research question is still "does multi-agent adversarial review produce
+  genuinely useful findings?" — don't lose that thread in architecture astronautics.
+- If you'd recommend deferring ALL migration, say so and explain why.
