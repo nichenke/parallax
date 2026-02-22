@@ -1,4 +1,4 @@
-# EARS/BDD Structured Input Experiment
+# PEARS Experiment: Does Review Add Value on Top of Structured Requirements?
 
 **Date:** 2026-02-21
 **Status:** Experiment design — ready for execution
@@ -6,13 +6,21 @@
 
 ---
 
+## PEARS: Parallax EARS
+
+**PEARS** (Parallax EARS) is a hybrid requirements format for systems with both deterministic and probabilistic behavior. It combines EARS syntax for deterministic components, BDD Given/When/Then for LLM skill behavior, JTBD for intent, and RFC 2119 SHALL/SHOULD/MAY for constraint tiers.
+
+The name distinguishes it from pure EARS (deterministic only), pure BDD (no trigger syntax), Kiro's format (IDE-locked), and cc-sdd's templates (no probabilistic/deterministic distinction).
+
+---
+
 ## Hypothesis
 
-Structuring requirements in EARS/BDD hybrid format produces higher-precision findings from parallax reviewer agents than equivalent unstructured requirements documents.
+Parallax adversarial review adds measurable value on top of PEARS-structured requirements fed through OpenSpec.
 
-**Why this matters:** If true, investing in EARS/BDD tooling (elicitation skill, linter, OpenSpec schema) is justified by measurable review quality improvement. If false or marginal, the three-layer architecture is overhead that doesn't improve the core product.
+**Why this matters:** If well-structured requirements already capture most gaps, the review gate may not justify its cost. If the review gate catches real issues that good structure misses, parallax's core value proposition is validated in a realistic workflow.
 
-**Null hypothesis:** Finding precision and actionability are comparable regardless of input format — the agents are limited by their prompt engineering, not by input structure.
+**Null hypothesis:** PEARS-structured requirements + OpenSpec produce designs that parallax reviewers cannot meaningfully improve — the structure is sufficient, the review is redundant.
 
 ---
 
@@ -20,97 +28,100 @@ Structuring requirements in EARS/BDD hybrid format produces higher-precision fin
 
 ### What we're actually testing
 
-The interesting question isn't "does document format help agents?" — it's "does a review-and-refine pass on requirements improve the whole downstream pipeline?" The experiment should test the *process*, not just the *format*.
+The starting artifact is a real requirements document that already has JTBD, MoSCoW, assumptions, and pre-mortem analysis — it's not "naive." The experiment tests whether **parallax review catches things that good requirements + OpenSpec miss**, not whether structure beats no-structure.
 
-### Three-arm comparison
+This is closer to the production question: in the three-layer architecture, you'd always have structured requirements. The variable is whether the review gate adds value.
+
+### Two-arm comparison
 
 ```
-Arm A (baseline):
-  Naive requirements → OpenSpec pipeline → build
+Arm A (no review):
+  PEARS requirements → OpenSpec pipeline → build
 
-Arm B (refined):
-  Same naive requirements → EARS/BDD review + refinement → OpenSpec pipeline → build
+Arm B (with review):
+  Same PEARS requirements → OpenSpec pipeline → parallax review → address findings → build
 
-Compare at every stage:
-  1. What did the review/refinement step catch? (Arm B only)
-  2. Did the OpenSpec output differ between arms?
-  3. Did parallax reviewer findings differ in quality?
-  4. Did downstream build quality differ?
+Compare:
+  1. Did parallax review surface genuine findings the structure missed?
+  2. Did addressing findings change the OpenSpec design?
+  3. Did downstream build quality differ?
 ```
 
 ### Variables
 
-- **Independent variable:** Whether requirements go through EARS/BDD review/refinement before entering OpenSpec
-- **Dependent variables:** Requirements gaps surfaced during refinement, OpenSpec artifact quality, parallax reviewer finding precision, downstream build quality
-- **Controlled:** Same feature, same agents, same reviewer temperature, same judge configuration, same OpenSpec schema
+- **Independent variable:** Whether OpenSpec-generated design goes through parallax adversarial review before build
+- **Dependent variables:** Findings surfaced by review (genuine vs. false positive), design changes prompted by review, downstream build quality
+- **Controlled:** Same PEARS requirements, same OpenSpec schema, same agents, same reviewer temperature, same judge configuration
 
 ### Method
 
-1. Select a real feature you're planning to build (not synthetic)
-2. Write naive requirements the way you naturally would — prose, bullet lists, whatever you'd put in a design doc. This is the starting point for both arms.
-3. **Arm A:** Feed naive requirements directly into OpenSpec (`/openspec:proposal` → `/openspec:ff`). Run parallax design-stage agents against the generated design. Collect findings.
-4. **Arm B:** Take the same naive requirements. Structure them using the EARS/BDD template below. Note every gap, ambiguity, and missing constraint the structuring process surfaces. Then feed the refined EARS/BDD requirements into OpenSpec. Run parallax design-stage agents against the generated design. Collect findings.
-5. Run reverse judge on both finding sets.
-6. Compare at each stage.
+1. Take existing requirements document. Restructure into PEARS format using the template and writing rules below. Track the refinement delta — what gaps the structuring process surfaces.
+2. **Arm A:** Feed PEARS requirements into OpenSpec (`/openspec:proposal` → `/openspec:ff`). Proceed directly to build.
+3. **Arm B:** Feed the same PEARS requirements into OpenSpec. Run parallax design-stage agents against the generated design. Evaluate findings. Address genuine findings (update requirements or design). Then build.
+4. Run reverse judge on Arm B findings.
+5. Compare at each stage.
 
-### What to measure at each stage
+### What to measure
 
-**Stage 1: Requirements refinement (Arm B only)**
+**Stage 0: PEARS structuring (both arms, before split)**
 
-This stage produces its own value signal independent of the agents:
-- How many gaps did the EARS/BDD structuring process surface?
-- Were these gaps real (would they have caused problems downstream)?
-- How much new information was forced by the template (JTBD, anti-goals, open questions)?
-- How long did refinement take? (effort cost of the process)
+The reformatting pass itself produces signal:
+- How many gaps did PEARS structuring surface vs. the original requirements?
+- Were these real gaps (would they have caused problems downstream)?
+- What new information was forced by the template (SHALL NOT boundaries, error scenarios, quantified NFRs)?
+- How much effort did the restructuring take?
 
-**Stage 2: OpenSpec artifact comparison**
+This stage is shared — both arms benefit from PEARS structure. It's not part of the A/B comparison, but it's valuable data about the format itself.
 
-- Are the OpenSpec-generated specs materially different between arms?
-- Does the Arm B spec have more specific acceptance criteria?
-- Does the Arm B spec have fewer ambiguous sections?
+**Stage 1: Parallax review value (Arm B only)**
 
-**Stage 3: Reviewer finding comparison**
+| Metric | Value |
+|---|---|
+| Total findings | |
+| Genuine findings (reverse judge) | |
+| Not genuine findings | |
+| Precision (genuine / total) | |
+| Severity distribution (Critical / Important / Minor) | |
+| Findings referencing specific requirement IDs | |
+| "Vague concern" findings (no specific remediation) | |
+| Findings that prompted design changes | |
 
-| Metric | Arm A | Arm B |
-|---|---|---|
-| Total findings | | |
-| Genuine findings (reverse judge) | | |
-| Precision (genuine / total) | | |
-| Severity distribution | | |
-| Findings referencing specific requirement IDs | N/A | |
-| "Vague concern" findings (no specific remediation) | | |
+Key question: did the agents find real issues that the PEARS structure didn't already surface?
 
-**Stage 4: Downstream build (qualitative)**
+**Stage 2: Design impact**
 
-- Did the Arm B build encounter fewer surprises?
-- Were there requirements misunderstandings that Arm A hit but Arm B avoided?
-- Did the build diverge from spec, and if so, where?
+- Did Arm B findings change the OpenSpec design? How many changes, how significant?
+- Were changes to requirements (upstream) or design (downstream)?
+- `diff arm-a-design.md arm-b-design.md` after findings addressed
+
+**Stage 3: Downstream build (qualitative)**
+
+- Did Arm A build encounter surprises that Arm B avoided?
+- Requirements misunderstandings in Arm A that Arm B caught in review?
+- Spec-to-build divergence in each arm?
 
 ### What "success" looks like
 
-- **Clear signal:** The EARS/BDD refinement pass surfaces real gaps (Stage 1), OpenSpec artifacts are measurably more specific (Stage 2), AND reviewer precision improves (Stage 3). All three stages show improvement.
-- **Process value, not agent value:** Refinement surfaces real gaps (Stage 1) and OpenSpec output improves (Stage 2), but reviewer precision is comparable (Stage 3). This means the format helps humans and OpenSpec, but not the review agents — still valuable, different investment case.
-- **Agent value only:** Reviewer precision improves (Stage 3) but the refinement process didn't surface much (Stage 1). The format helps agents parse better, but the human effort of structuring isn't justified — consider a lighter-weight formatting pass instead.
-- **No signal:** Comparable across all stages. The refinement process is overhead without measurable benefit.
-- **Negative signal:** EARS/BDD structure causes agents to generate more false positives or OpenSpec produces worse output from over-specified input.
+- **Clear signal:** Parallax review surfaces genuine findings (>50% precision) that PEARS structure missed, findings prompt meaningful design changes, Arm B build has fewer surprises.
+- **Marginal signal:** Some genuine findings, but most are things the PEARS structure already implied — reviewers are restating what the format made obvious. Review adds confidence, not information.
+- **No signal:** Findings are mostly false positives or vague concerns. PEARS structure was sufficient; review added overhead without value.
+- **Negative signal:** Review findings prompt changes that make the design worse, or review overhead delays the build without improving it.
 
 ### Limitations
 
-This is N=1. It produces directional signal, not statistical proof. Label results as "exploratory." The three-arm design partially compensates by producing signal at multiple stages — even if agent precision is inconclusive at N=1, the requirements refinement stage produces qualitative data that's useful regardless of sample size.
+This is N=1. It produces directional signal, not statistical proof. Label results as "exploratory." The two-arm design compensates partially by producing qualitative signal during the build phase — even if finding precision is inconclusive at N=1, the build-phase comparison reveals whether review prevented real problems.
 
 ---
 
-## EARS/BDD Hybrid Format: Scaffolding
+## PEARS Format: Scaffolding
 
 ### Prior art incorporated
 
-Research into cc-sdd (Kiro-inspired SDD tools) and production EARS specs (Vibe Kanban) surfaced three patterns missing from the initial template:
+Research into cc-sdd (Kiro-inspired SDD tools) and production EARS specs surfaced three patterns added to the base EARS/BDD hybrid:
 
-1. **Unwanted behavior requirements (EARS pattern #4)** — `SHALL NOT` specifications are a distinct EARS pattern, not just a negated constraint. They give review agents explicit boundaries to probe and are particularly useful for Assumption Hunter and Edge Case Prober.
-2. **Quantified constraints** — Production EARS specs enforce concrete numbers on every performance/scale/latency constraint (P95 latencies, throughput targets, batch sizes). "Fast" is not a requirement; "P95 < 500ms" is.
-3. **Error scenarios as first-class requirements** — Failure modes and error handling specified alongside happy-path behavior, not deferred to implementation.
-
-These are incorporated into the template and writing rules below.
+1. **Unwanted behavior requirements (EARS pattern #4)** — `SHALL NOT` specifications are a distinct EARS pattern, not just a negated constraint. They give review agents explicit boundaries to probe.
+2. **Quantified constraints** — Concrete numbers mandatory on every performance/scale/latency constraint. "Fast" is not a requirement; "P95 < 500ms" is.
+3. **Error scenarios as first-class requirements** — Failure modes specified alongside happy-path behavior, not deferred to implementation.
 
 ### When to use which format
 
@@ -136,7 +147,7 @@ EARS `SHALL` implies a guarantee. LLMs don't guarantee. Forcing probabilistic be
 ### Document template
 
 ```markdown
-# [Feature Name] — Requirements
+# [Feature Name] — PEARS Requirements
 
 ## Overview
 
@@ -278,124 +289,100 @@ what the question is, what the options are, what's blocking resolution.]
 
 ---
 
-## Project Selection Criteria
-
-The experiment project should be:
-
-- **Real** — something you'd build anyway, not a synthetic exercise. Synthetic examples produce synthetic findings; the experiment needs realistic ambiguity and real gaps to find.
-- **Skill-sized** — small enough that one requirements pass is feasible in a single session. A full service design is too much scope for N=1.
-- **Mixed deterministic/probabilistic** — includes both hook/tool behavior (EARS-appropriate) and skill/agent behavior (BDD-appropriate). This exercises the hybrid model, not just one format.
-- **Has natural gaps** — you know there are open questions or unstated assumptions. Perfect requirements produce no findings; the agents need something to find.
-
-Good candidates: a Claude Code skill, a CLI hook, an MCP tool integration — anything with both a deterministic interface and LLM-driven behavior.
-
----
-
 ## Execution Steps
 
-### Step 1: Select project, write naive requirements
+### Step 1: Restructure existing requirements into PEARS format
 
-Pick a real feature. Write requirements the way you naturally would — prose, bullet lists, whatever you'd put in a CLAUDE.md or design doc. Don't artificially make it worse; write it the way you'd actually write it.
+Take the existing requirements document. Restructure into PEARS format using the template and writing rules above.
 
-Save as `docs/experiments/ears-bdd/naive-requirements.md`.
-
-### Step 2: Arm A — Naive requirements → OpenSpec
-
-Feed the naive requirements directly into OpenSpec:
-```
-/openspec:proposal [paste naive requirements]
-/openspec:ff
-```
-
-Save the generated OpenSpec design artifact as `docs/experiments/ears-bdd/arm-a-openspec-design.md`.
-
-### Step 3: Arm A — Run design-stage agents
-
-Run all 6 design-stage agents (Assumption Hunter, Edge Case Prober, Requirement Auditor, Feasibility Skeptic, First Principles Challenger, Prior Art Scout) against the Arm A OpenSpec design.
-
-Save findings as `docs/experiments/ears-bdd/arm-a-findings.jsonl`.
-
-### Step 4: Arm B — EARS/BDD refinement pass
-
-Take the same naive requirements. Structure them using the EARS/BDD template above.
-
-**Track the refinement delta:**
-- List every gap, ambiguity, and missing constraint the structuring process surfaces
-- Note which information is *new* (forced by the template) vs. *restructured* (already present)
-- Record the effort involved (rough time, number of iterations)
+**Track the restructuring delta:**
+- List every gap, ambiguity, and missing constraint the PEARS structuring surfaces
+- Note which information is *new* (forced by the template — SHALL NOT boundaries, error scenarios, quantified NFRs, anti-goals) vs. *restructured* (already present, reformatted)
+- Record effort involved
 
 Save as:
-- `docs/experiments/ears-bdd/arm-b-refined-requirements.md` (the EARS/BDD document)
-- `docs/experiments/ears-bdd/arm-b-refinement-delta.md` (what the process surfaced)
+- `pears-requirements.md` (the PEARS document)
+- `pears-restructuring-delta.md` (what the process surfaced)
 
-### Step 5: Arm B — Refined requirements → OpenSpec
+### Step 2: Arm A — PEARS requirements → OpenSpec → build (no review)
 
-Feed the EARS/BDD-structured requirements into OpenSpec:
+Feed PEARS requirements into OpenSpec:
 ```
-/openspec:proposal [paste refined requirements]
+/openspec:proposal [paste PEARS requirements]
 /openspec:ff
 ```
 
-Save as `docs/experiments/ears-bdd/arm-b-openspec-design.md`.
+Proceed directly to build from the generated design. Do not run parallax review.
 
-### Step 6: Arm B — Run design-stage agents
+Save the OpenSpec design artifact for later comparison.
 
-Same agents, same configuration, against the Arm B OpenSpec design.
+### Step 3: Arm B — PEARS requirements → OpenSpec → parallax review → build
 
-Save findings as `docs/experiments/ears-bdd/arm-b-findings.jsonl`.
+Feed the same PEARS requirements into OpenSpec (same commands).
 
-### Step 7: Run reverse judge on both finding sets
+Run all 6 design-stage agents (Assumption Hunter, Edge Case Prober, Requirement Auditor, Feasibility Skeptic, First Principles Challenger, Prior Art Scout) against the generated design.
 
-Use the existing eval framework's reverse judge (Haiku, T=0.0) to score each finding as GENUINE or NOT_GENUINE against its respective OpenSpec design document.
+Evaluate findings. Address genuine findings — update requirements or design as needed. Then build.
 
-### Step 8: Compare at every stage
+Save:
+- OpenSpec design artifact (pre-review)
+- Agent findings (JSONL)
+- Changes made in response to findings
+- OpenSpec design artifact (post-review, if changed)
 
-**Stage 1 — Refinement value (Arm B only):**
-- Gaps surfaced by EARS/BDD structuring: [count and list]
+### Step 4: Run reverse judge on Arm B findings
+
+Use the eval framework's reverse judge (Haiku, T=0.0) to score each finding as GENUINE or NOT_GENUINE against the OpenSpec design document.
+
+### Step 5: Compare at every stage
+
+**Stage 0 — PEARS restructuring value (shared, pre-split):**
+- Gaps surfaced by PEARS structuring: [count and list]
 - Were these real gaps or template noise?
 - New information forced by template: [list]
 
-**Stage 2 — OpenSpec artifact diff:**
-- `diff arm-a-openspec-design.md arm-b-openspec-design.md`
-- Material differences: [list]
-- More specific acceptance criteria in Arm B? [yes/no + examples]
+**Stage 1 — Parallax review value (Arm B only):**
 
-**Stage 3 — Reviewer findings:**
+| Metric | Value |
+|---|---|
+| Total findings | |
+| Genuine findings | |
+| Precision (genuine / total) | |
+| Severity distribution (Crit / Imp / Min) | |
+| Findings referencing requirement IDs | |
+| Vague concern findings | |
+| Findings that prompted design changes | |
 
-| Metric | Arm A | Arm B |
-|---|---|---|
-| Total findings | | |
-| Genuine findings | | |
-| Precision (genuine / total) | | |
-| Severity distribution (Crit / Imp / Min) | | |
-| Findings referencing requirement IDs | N/A | |
-| Vague concern findings | | |
+**Stage 2 — Design impact:**
+- Changes prompted by review findings: [count and description]
+- Were changes to requirements (upstream) or design (downstream)?
+- Diff of pre-review vs. post-review design
 
-**Stage 4 — Qualitative (if you proceed to build):**
-- Requirements misunderstandings hit during build
-- Scope surprises
-- Spec-to-build divergence
+**Stage 3 — Downstream build (qualitative):**
+- Surprises in Arm A build that Arm B avoided?
+- Requirements misunderstandings?
+- Spec-to-build divergence?
 
-### Step 9: Decision
+### Step 6: Decision
 
 | Result | Action |
 |---|---|
-| All three stages show improvement | Design larger experiment (N>=10). Invest in EARS/BDD tooling. |
-| Process value only (Stage 1-2 improve, Stage 3 comparable) | Adopt EARS/BDD as a human practice. Skip agent-specific tooling. |
-| Agent value only (Stage 3 improves, Stage 1-2 marginal) | Investigate lighter formatting pass — maybe just section structure, not full EARS/BDD. |
-| No signal across stages | Defer EARS/BDD investment. Focus on agent prompt improvement. |
-| Negative signal | Investigate root cause before abandoning — is it the format or the OpenSpec integration? |
+| Review finds genuine issues structure missed, build improves | Parallax review gate validated. Invest in integration tooling. |
+| Review finds genuine issues but build quality is comparable | Review adds confidence, not information. Keep as optional gate. |
+| Review mostly restates what PEARS made obvious | Structure is sufficient. Defer review integration, focus on harder problems. |
+| Review produces mostly false positives | Agents need prompt improvement before integration is worthwhile. |
+| Review findings make design worse | Investigate root cause — is it the agents, the artifact format, or the OpenSpec integration? |
 
 ---
 
 ## Cautions
 
-**Separate the variables.** This experiment tests whether structured input improves design-stage review quality. It does NOT test whether the requirements-stage agents are useful as EARS/BDD validators — that's a different experiment, only worth running if this one shows positive signal.
+**This tests the review gate, not the format.** Both arms use PEARS-structured requirements. The variable is whether parallax review adds value on top of good structure. Don't conflate PEARS restructuring signal (Stage 0) with review signal (Stage 1).
 
-**Don't refactor parallax first.** The agents consume raw markdown. An EARS/BDD document is raw markdown. No pipeline changes needed for this experiment. If the experiment succeeds, *then* consider tooling.
+**Don't refactor parallax first.** The agents consume raw markdown. A PEARS document is raw markdown. An OpenSpec design artifact is raw markdown. No pipeline changes needed.
 
-**Watch for confirmation bias.** You're invested in the three-layer architecture. Pre-commit to what "not worth pursuing" looks like (the decision table above) so you have an exit ramp.
+**Watch for confirmation bias.** You want the review gate to work — that's parallax's reason for existing. Pre-commit to what "not worth pursuing" looks like (the decision table above).
 
-**N=1 produces direction, not proof.** Label results as "exploratory." Don't make ADR decisions from a single comparison.
+**N=1 produces direction, not proof.** Label results as "exploratory."
 
-**The template is the minimal scaffolding.** Don't build an elicitation skill, an EARS linter, or an OpenSpec schema customization before running this experiment. The template and writing rules above are enough to produce a properly structured document by hand.
+**The PEARS template is the minimal scaffolding.** Don't build an elicitation skill, a PEARS linter, or an OpenSpec schema customization before running this experiment. The template and writing rules above are enough to produce a properly structured document by hand.
